@@ -9,6 +9,7 @@ class Renta(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     fecha_inicio = Column(TIMESTAMP, default=datetime.utcnow)
     fecha_fin = Column(TIMESTAMP)
     tarifa_diaria = Column(Float, nullable=False)
@@ -16,3 +17,4 @@ class Renta(Base):
     total = Column(Float)
 
     inventario = relationship("Inventario", back_populates="rentas")
+    client = relationship("Client", back_populates="rentas")

@@ -12,4 +12,4 @@ class Client(Base):
     phone = Column(String, nullable=True)
     address = Column(String, nullable=True)
 
-    rentals = relationship("Rental", back_populates="client")
+    rentas = relationship("Renta", back_populates="client")

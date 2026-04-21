@@ -9,11 +9,16 @@ load_dotenv(dotenv_path=project_root / ".env")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:password@localhost:5432/beru_db",
+    "sqlite:///./beru_db.db",
 )
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# SQLite requiere check_same_thread=False
+if "sqlite" in DATABASE_URL:
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+    
+SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
 
 
 def get_db():
