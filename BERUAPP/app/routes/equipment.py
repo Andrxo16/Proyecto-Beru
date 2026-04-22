@@ -1,51 +1,18 @@
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
-from app.db.session import get_db
-from app.models.equipment import Inventario
-from app.schemas.equipment import InventarioCreate, InventarioResponse
-from app.services.equipment_service import (
-    create_equipment,
-    get_all_equipment,
-    get_equipment_by_id,
-    update_equipment,
-    delete_equipment,
-)
+from fastapi import APIRouter
+from app.schemas.equipment import EquipmentCreate
 
 router = APIRouter(prefix="/equipment", tags=["Equipment"])
 
+# 🔥 Base de datos simulada
+fake_db = []
 
-@router.post("/", response_model=InventarioResponse)
-def create_equipment_endpoint(equipment: InventarioCreate, db: Session = Depends(get_db)):
-    return create_equipment(db, equipment)
+@router.post("/")
+def create_equipment(equipment: EquipmentCreate):
+    new_equipment = equipment.dict()
+    new_equipment["id"] = len(fake_db) + 1
+    fake_db.append(new_equipment)
+    return new_equipment
 
-
-@router.get("/", response_model=List[InventarioResponse])
-def get_equipment(db: Session = Depends(get_db)):
-    return get_all_equipment(db)
-
-
-@router.get("/{equipment_id}", response_model=InventarioResponse)
-def get_equipment_by_id_endpoint(equipment_id: int, db: Session = Depends(get_db)):
-    db_equipment = get_equipment_by_id(db, equipment_id)
-    if db_equipment is None:
-        raise HTTPException(status_code=404, detail="Equipment not found")
-    return db_equipment
-
-
-@router.put("/{equipment_id}", response_model=InventarioResponse)
-def update_equipment_endpoint(equipment_id: int, equipment_update: InventarioCreate, db: Session = Depends(get_db)):
-    db_equipment = update_equipment(db, equipment_id, equipment_update)
-    if db_equipment is None:
-        raise HTTPException(status_code=404, detail="Equipment not found")
-    return db_equipment
-
-
-@router.delete("/{equipment_id}")
-def delete_equipment_endpoint(equipment_id: int, db: Session = Depends(get_db)):
-    success = delete_equipment(db, equipment_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Equipment not found")
-    return {"message": "Equipment deleted successfully"}
+@router.get("/")
+def get_equipment():
+    return fake_db
