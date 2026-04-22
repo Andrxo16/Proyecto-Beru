@@ -1,18 +1,22 @@
-from fastapi import APIRouter
-from app.schemas.equipment import EquipmentCreate
+from typing import List
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.db.equipment import Inventario
+from app.schemas.equipment import EquipmentCreate, EquipmentResponse
 
 router = APIRouter(prefix="/equipment", tags=["Equipment"])
 
-# 🔥 Base de datos simulada
-fake_db = []
-
-@router.post("/")
-def create_equipment(equipment: EquipmentCreate):
-    new_equipment = equipment.dict()
-    new_equipment["id"] = len(fake_db) + 1
-    fake_db.append(new_equipment)
+@router.post("/", response_model=EquipmentResponse)
+def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
+    new_equipment = Inventario(**equipment.model_dump())
+    db.add(new_equipment)
+    db.commit()
+    db.refresh(new_equipment)
     return new_equipment
 
-@router.get("/")
-def get_equipment():
-    return fake_db
+
+@router.get("/", response_model=List[EquipmentResponse])
+def get_equipment(db: Session = Depends(get_db)):
+    items = db.query(Inventario).order_by(Inventario.id.desc()).all()
+    return items
