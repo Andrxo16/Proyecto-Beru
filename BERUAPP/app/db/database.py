@@ -3,13 +3,16 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 
-# Change to temp directory to avoid path issues
-os.chdir(r"c:\temp")
-
-# Database URL with connect_args to avoid Unicode issues
-engine = create_engine(
+# Permite sobreescribir la URL completa desde el entorno.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
     "postgresql+psycopg2://postgrest:pgadmin@127.0.0.1:5432/beru_db",
-    connect_args={'client_encoding': 'utf8'}
+)
+
+# Conexión a PostgreSQL con codificación UTF-8.
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"client_encoding": "utf8"},
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

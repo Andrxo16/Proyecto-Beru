@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey, CheckConstraint
+﻿from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey, text
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
@@ -16,7 +16,7 @@ class Inventario(Base):
     categoria = Column(String(100))
     anio = Column(Integer)
     tarifa_diaria = Column(Numeric(10, 2))
-    created_at = Column(TIMESTAMP, default='CURRENT_TIMESTAMP')
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     
     # Relationships
     subinventarios = relationship("Subinventario", back_populates="inventario")
@@ -41,15 +41,15 @@ class InventarioSalida(Base):
     nombre_material = Column(String(150), nullable=False)
     precio = Column(Numeric(10, 2), nullable=False)
     unidades_vendidas = Column(Integer, default=0)
-    fecha_venta = Column(TIMESTAMP, default='CURRENT_TIMESTAMP')
-    created_at = Column(TIMESTAMP, default='CURRENT_TIMESTAMP')
+    fecha_venta = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 class Renta(Base):
     __tablename__ = "rentas"
     
     id = Column(Integer, primary_key=True, index=True)
     inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
-    fecha_inicio = Column(TIMESTAMP, default='CURRENT_TIMESTAMP')
+    fecha_inicio = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     fecha_fin = Column(TIMESTAMP)
     tarifa_diaria = Column(Numeric(10, 2), nullable=False)
     dias = Column(Integer)
