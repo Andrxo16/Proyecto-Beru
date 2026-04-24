@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey, text
+﻿from sqlalchemy import Boolean, Column, Integer, String, Text, Numeric, TIMESTAMP, ForeignKey, text
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
@@ -49,11 +49,30 @@ class Renta(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
     fecha_inicio = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     fecha_fin = Column(TIMESTAMP)
     tarifa_diaria = Column(Numeric(10, 2), nullable=False)
+    deposito = Column(Numeric(12, 2), server_default=text("0"))
     dias = Column(Integer)
     total = Column(Numeric(12, 2))
+    facturado = Column(Boolean, default=False)
+    fecha_facturacion = Column(TIMESTAMP)
     
     # Relationships
     inventario = relationship("Inventario", back_populates="rentas")
+    cliente = relationship("Cliente", back_populates="rentas")
+
+
+class Cliente(Base):
+    __tablename__ = "clientes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(150), nullable=False)
+    correo = Column(String(150))
+    telefono = Column(String(30))
+    numero_alquileres = Column(Integer, default=0)
+    estado = Column(String(20), default="activo")
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    rentas = relationship("Renta", back_populates="cliente")

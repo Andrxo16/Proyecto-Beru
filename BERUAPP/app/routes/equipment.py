@@ -1,9 +1,14 @@
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.database import get_db
-from app.db.equipment import Inventario
-from app.schemas.equipment import EquipmentCreate, EquipmentResponse
+from app.db.equipment import Inventario, Subinventario
+from app.schemas.equipment import (
+    EquipmentCreate,
+    EquipmentResponse,
+    SubinventoryCreate,
+    SubinventoryResponse,
+)
 
 router = APIRouter(prefix="/equipment", tags=["Equipment"])
 
@@ -20,3 +25,43 @@ def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
 def get_equipment(db: Session = Depends(get_db)):
     items = db.query(Inventario).order_by(Inventario.id.desc()).all()
     return items
+
+
+@router.get("/{equipment_id}/subinventory", response_model=List[SubinventoryResponse])
+def get_subinventory_by_equipment(equipment_id: int, db: Session = Depends(get_db)):
+    equipment = db.query(Inventario).filter(Inventario.id == equipment_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    items = (
+        db.query(Subinventario)
+        .filter(Subinventario.inventario_id == equipment_id)
+        .order_by(Subinventario.id.desc())
+        .all()
+    )
+    return items
+
+
+@router.post("/{equipment_id}/subinventory", response_model=SubinventoryResponse)
+def create_subinventory_item(
+    equipment_id: int,
+    payload: SubinventoryCreate,
+    db: Session = Depends(get_db),
+):
+    equipment = db.query(Inventario).filter(Inventario.id == equipment_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    if payload.cantidad < 1:
+        raise HTTPException(status_code=400, detail="La cantidad debe ser mayor o igual a 1")
+
+    new_item = Subinventario(
+        inventario_id=equipment_id,
+        nombre_item=payload.nombre_item,
+        cantidad=payload.cantidad,
+        descripcion=payload.descripcion,
+    )
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return new_item
