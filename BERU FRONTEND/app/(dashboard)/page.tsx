@@ -5,6 +5,18 @@ import { EquipmentAvailability } from "@/components/equipment-availability"
 import { Package, Users, FileText, DollarSign } from "lucide-react"
 
 export default function DashboardPage() {
+  const ingresosMesCOP = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(45230000)
+
+  const metaMesCOP = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(50000000)
+
   return (
     <div className="flex flex-col">
       <Header 
@@ -38,8 +50,8 @@ export default function DashboardPage() {
           />
           <StatsCard
             title="Ingresos del Mes"
-            value="$45,230"
-            description="Meta: $50,000"
+            value={ingresosMesCOP}
+            description={`Meta: ${metaMesCOP}`}
             icon={DollarSign}
             trend={{ value: 5, isPositive: true }}
           />

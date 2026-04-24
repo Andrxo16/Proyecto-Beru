@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,13 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -30,120 +24,49 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, FileText, Calendar, MoreHorizontal, Eye, Edit, XCircle } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Plus, Search, FileText, Calendar, CheckCircle2 } from "lucide-react"
+import * as api from "@/lib/api"
 
-const alquileres = [
-  {
-    id: "ALQ-001",
-    cliente: "Constructora ABC S.A.",
-    equipo: "Excavadora CAT 320",
-    fechaInicio: "2026-04-15",
-    fechaFin: "2026-04-22",
-    dias: 7,
-    tarifaDiaria: 450,
-    total: 3150,
-    estado: "activo",
-  },
-  {
-    id: "ALQ-002",
-    cliente: "Obras del Norte S.A.",
-    equipo: "Grua Torre 50T",
-    fechaInicio: "2026-04-14",
-    fechaFin: "2026-04-30",
-    dias: 16,
-    tarifaDiaria: 800,
-    total: 12800,
-    estado: "activo",
-  },
-  {
-    id: "ALQ-003",
-    cliente: "Minera Central",
-    equipo: "Retroexcavadora JCB",
-    fechaInicio: "2026-04-10",
-    fechaFin: "2026-04-17",
-    dias: 7,
-    tarifaDiaria: 320,
-    total: 2240,
-    estado: "por-vencer",
-  },
-  {
-    id: "ALQ-004",
-    cliente: "Pavimentos Express",
-    equipo: "Rodillo Compactador BOMAG",
-    fechaInicio: "2026-04-08",
-    fechaFin: "2026-04-15",
-    dias: 7,
-    tarifaDiaria: 280,
-    total: 1960,
-    estado: "vencido",
-  },
-  {
-    id: "ALQ-005",
-    cliente: "Ingenieria Civil Ltda",
-    equipo: "Montacargas Toyota 5T",
-    fechaInicio: "2026-04-12",
-    fechaFin: "2026-04-19",
-    dias: 7,
-    tarifaDiaria: 180,
-    total: 1260,
-    estado: "activo",
-  },
-  {
-    id: "ALQ-006",
-    cliente: "Desarrollos Urbanos MX",
-    equipo: "Grua Movil 30T",
-    fechaInicio: "2026-04-01",
-    fechaFin: "2026-04-10",
-    dias: 9,
-    tarifaDiaria: 650,
-    total: 5850,
-    estado: "finalizado",
-  },
-  {
-    id: "ALQ-007",
-    cliente: "Constructora ABC S.A.",
-    equipo: "Minicargador Bobcat",
-    fechaInicio: "2026-04-05",
-    fechaFin: "2026-04-12",
-    dias: 7,
-    tarifaDiaria: 220,
-    total: 1540,
-    estado: "finalizado",
-  },
-  {
-    id: "ALQ-008",
-    cliente: "Minera Central",
-    equipo: "Excavadora Komatsu PC200",
-    fechaInicio: "2026-04-20",
-    fechaFin: "2026-05-05",
-    dias: 15,
-    tarifaDiaria: 420,
-    total: 6300,
-    estado: "pendiente",
-  },
-]
+type Rental = {
+  id: number
+  inventario_id: number
+  cliente_id?: number | null
+  fecha_inicio: string
+  fecha_fin: string
+  deposito?: number
+  dias: number
+  tarifa_diaria: number
+  total: number
+  estado: "activo" | "por-vencer" | "vencido" | "facturado"
+  facturado?: boolean
+  cliente?: string | null
+  equipo_nombre?: string | null
+}
+
+type Equipment = {
+  id: number
+  nombre_equipo: string
+  tarifa_diaria: number
+  estado: string
+}
+
+type Client = {
+  id: number
+  nombre: string
+}
 
 const estadoStyles = {
   activo: "bg-green-100 text-green-800",
   "por-vencer": "bg-yellow-100 text-yellow-800",
   vencido: "bg-red-100 text-red-800",
-  finalizado: "bg-gray-100 text-gray-800",
-  pendiente: "bg-blue-100 text-blue-800",
+  facturado: "bg-blue-100 text-blue-800",
 }
 
 const estadoLabels = {
   activo: "Activo",
   "por-vencer": "Por Vencer",
   vencido: "Vencido",
-  finalizado: "Finalizado",
-  pendiente: "Pendiente",
+  facturado: "Facturado",
 }
 
 function formatDate(dateString: string) {
@@ -156,30 +79,112 @@ function formatDate(dateString: string) {
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("es-MX", {
+  return new Intl.NumberFormat("es-CO", {
     style: "currency",
-    currency: "USD",
+    currency: "COP",
+    maximumFractionDigits: 0,
   }).format(amount)
 }
 
 export default function AlquileresPage() {
+  const [rentals, setRentals] = useState<Rental[]>([])
+  const [equipment, setEquipment] = useState<Equipment[]>([])
+  const [clients, setClients] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterEstado, setFilterEstado] = useState("todos")
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [clientSearch, setClientSearch] = useState("")
 
-  const filteredAlquileres = alquileres.filter((alquiler) => {
+  const [formData, setFormData] = useState({
+    cliente_id: "",
+    inventario_id: "",
+    fecha_inicio: "",
+    fecha_fin: "",
+    deposito: "",
+    ubicacion: "",
+  })
+
+  const loadData = async () => {
+    try {
+      const [rentalsData, equipmentData, clientsData] = await Promise.all([
+        api.getRentals(),
+        api.getEquipment(),
+        api.getClients(),
+      ])
+      setRentals(rentalsData)
+      setEquipment(equipmentData)
+      setClients(Array.isArray(clientsData) ? clientsData : [])
+    } catch (error) {
+      console.error("Error al cargar alquileres:", error)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const filteredAlquileres = rentals.filter((alquiler) => {
+    const displayId = `ALQ-${String(alquiler.id).padStart(3, "0")}`
     const matchesSearch = 
-      alquiler.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alquiler.equipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alquiler.id.toLowerCase().includes(searchTerm.toLowerCase())
+      (alquiler.cliente || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (alquiler.equipo_nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      displayId.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesEstado = filterEstado === "todos" || alquiler.estado === filterEstado
     return matchesSearch && matchesEstado
   })
 
   // Summary stats
   const stats = {
-    activos: alquileres.filter(a => a.estado === "activo").length,
-    porVencer: alquileres.filter(a => a.estado === "por-vencer").length,
-    totalMes: alquileres.reduce((sum, a) => sum + a.total, 0),
+    activos: rentals.filter(a => a.estado === "activo").length,
+    porVencer: rentals.filter(a => a.estado === "por-vencer").length,
+    totalMes: rentals.reduce((sum, a) => sum + Number(a.total ?? 0), 0),
+  }
+
+  const handleCreateRental = async () => {
+    if (!formData.cliente_id || !formData.inventario_id || !formData.fecha_inicio || !formData.fecha_fin || !formData.ubicacion.trim()) {
+      alert("Debes completar cliente, equipo, fechas y ubicacion")
+      return
+    }
+
+    try {
+      setLoading(true)
+      await api.createRental({
+        inventario_id: Number(formData.inventario_id),
+        cliente_id: Number(formData.cliente_id),
+        fecha_inicio: formData.fecha_inicio,
+        fecha_fin: formData.fecha_fin,
+        deposito: Number(formData.deposito || 0),
+        ubicacion: formData.ubicacion.trim(),
+      })
+
+      await loadData()
+      setFormData({
+        cliente_id: "",
+        inventario_id: "",
+        fecha_inicio: "",
+        fecha_fin: "",
+        deposito: "",
+        ubicacion: "",
+      })
+      setClientSearch("")
+      setDialogOpen(false)
+    } catch (error) {
+      console.error("Error al crear alquiler:", error)
+      alert("No se pudo crear el alquiler. Verifica que la fecha fin sea mayor que la fecha inicio.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCloseInvoice = async (rentalId: number) => {
+    try {
+      await api.closeRentalInvoice(rentalId)
+      await loadData()
+    } catch (error) {
+      console.error("Error al facturar alquiler:", error)
+      alert("No se pudo marcar como facturado")
+    }
   }
 
   return (
@@ -248,12 +253,10 @@ export default function AlquileresPage() {
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="por-vencer">Por Vencer</SelectItem>
                 <SelectItem value="vencido">Vencido</SelectItem>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-                <SelectItem value="finalizado">Finalizado</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                 <Plus className="mr-2 h-4 w-4" />
@@ -270,47 +273,98 @@ export default function AlquileresPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="cliente">Cliente</Label>
-                  <Select>
-                    <SelectTrigger>
+                  <Input
+                    id="buscar-cliente"
+                    placeholder="Buscar cliente..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                  />
+                  <Select
+                    value={formData.cliente_id}
+                    onValueChange={(value) => setFormData({ ...formData, cliente_id: value })}
+                  >
+                    <SelectTrigger id="cliente">
                       <SelectValue placeholder="Seleccionar cliente" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cli-001">Constructora ABC S.A.</SelectItem>
-                      <SelectItem value="cli-002">Obras del Norte S.A.</SelectItem>
-                      <SelectItem value="cli-003">Minera Central</SelectItem>
-                      <SelectItem value="cli-004">Pavimentos Express</SelectItem>
-                      <SelectItem value="cli-005">Ingenieria Civil Ltda</SelectItem>
+                      {clients
+                        .filter((c) => c.nombre.toLowerCase().includes(clientSearch.toLowerCase()))
+                        .map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.nombre}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="equipo">Equipo</Label>
-                  <Select>
+                  <Select
+                    value={formData.inventario_id}
+                    onValueChange={(value) => setFormData({ ...formData, inventario_id: value })}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar equipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="eq-002">Grua Torre 50T - $800/dia</SelectItem>
-                      <SelectItem value="eq-003">Retroexcavadora JCB - $320/dia</SelectItem>
-                      <SelectItem value="eq-006">Excavadora Komatsu PC200 - $420/dia</SelectItem>
-                      <SelectItem value="eq-007">Minicargador Bobcat - $220/dia</SelectItem>
+                      {equipment.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {item.nombre_equipo} - ${Number(item.tarifa_diaria ?? 0).toLocaleString()}/dia
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ubicacion">Ubicacion del equipo</Label>
+                  <Input
+                    id="ubicacion"
+                    placeholder="Ej: Obra Norte - Bodega 3"
+                    value={formData.ubicacion}
+                    onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="deposito">Deposito (COP)</Label>
+                  <Input
+                    id="deposito"
+                    type="number"
+                    min={0}
+                    placeholder="Ej: 300000"
+                    value={formData.deposito}
+                    onChange={(e) => setFormData({ ...formData, deposito: e.target.value })}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="fechaInicio">Fecha Inicio</Label>
-                    <Input id="fechaInicio" type="date" />
+                    <Input
+                      id="fechaInicio"
+                      type="date"
+                      value={formData.fecha_inicio}
+                      onChange={(e) => setFormData({ ...formData, fecha_inicio: e.target.value })}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="fechaFin">Fecha Fin</Label>
-                    <Input id="fechaFin" type="date" />
+                    <Input
+                      id="fechaFin"
+                      type="date"
+                      value={formData.fecha_fin}
+                      onChange={(e) => setFormData({ ...formData, fecha_fin: e.target.value })}
+                    />
                   </div>
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline">Cancelar</Button>
-                <Button className="bg-primary text-primary-foreground">Crear Alquiler</Button>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button
+                  className="bg-primary text-primary-foreground"
+                  onClick={handleCreateRental}
+                  disabled={loading}
+                >
+                  {loading ? "Creando..." : "Crear Alquiler"}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -329,17 +383,19 @@ export default function AlquileresPage() {
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Dias</TableHead>
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Total</TableHead>
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Estado</TableHead>
-                  <TableHead className="text-xs font-medium uppercase text-muted-foreground w-10"></TableHead>
+                  <TableHead className="text-xs font-medium uppercase text-muted-foreground">Facturar</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAlquileres.map((alquiler) => (
                   <TableRow key={alquiler.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium text-card-foreground">{alquiler.id}</TableCell>
-                    <TableCell className="text-card-foreground">{alquiler.cliente}</TableCell>
-                    <TableCell className="text-muted-foreground">{alquiler.equipo}</TableCell>
+                    <TableCell className="font-medium text-card-foreground">
+                      {`ALQ-${String(alquiler.id).padStart(3, "0")}`}
+                    </TableCell>
+                    <TableCell className="text-card-foreground">{alquiler.cliente || "Sin cliente"}</TableCell>
+                    <TableCell className="text-muted-foreground">{alquiler.equipo_nombre || "Equipo"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDate(alquiler.fechaInicio)} - {formatDate(alquiler.fechaFin)}
+                      {formatDate(alquiler.fecha_inicio)} - {formatDate(alquiler.fecha_fin)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{alquiler.dias}</TableCell>
                     <TableCell className="font-semibold text-card-foreground">{formatCurrency(alquiler.total)}</TableCell>
@@ -352,28 +408,16 @@ export default function AlquileresPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Ver Detalles
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-red-600">
-                            <XCircle className="mr-2 h-4 w-4" />
-                            Cancelar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button
+                        size="sm"
+                        variant={alquiler.estado === "facturado" ? "outline" : "default"}
+                        className={alquiler.estado === "facturado" ? "" : "bg-green-600 text-white hover:bg-green-700"}
+                        disabled={alquiler.estado === "facturado"}
+                        onClick={() => handleCloseInvoice(alquiler.id)}
+                      >
+                        <CheckCircle2 className="mr-1 h-4 w-4" />
+                        {alquiler.estado === "facturado" ? "Facturado" : "Cerrar factura"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

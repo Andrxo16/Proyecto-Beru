@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes import equipment, clients, rentals
 
 app = FastAPI()
+print("Clients route file:", getattr(clients, "__file__", "unknown"))
 
 app.add_middleware(
     CORSMiddleware,

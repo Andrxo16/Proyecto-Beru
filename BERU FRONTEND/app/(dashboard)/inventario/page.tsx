@@ -38,6 +38,14 @@ type Equipment = {
   created_at?: string | null;
 }
 
+type SubinventoryItem = {
+  id: number;
+  inventario_id: number;
+  nombre_item: string;
+  cantidad: number;
+  descripcion?: string | null;
+}
+
 const estadoStyles = {
   disponible: "bg-green-100 text-green-800",
   prestamo: "bg-blue-100 text-blue-800",
@@ -53,6 +61,10 @@ const estadoLabels = {
 export default function InventarioPage() {
   const [data, setData] = useState<Equipment[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [subinventoryDialogOpen, setSubinventoryDialogOpen] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+  const [subinventoryItems, setSubinventoryItems] = useState<SubinventoryItem[]>([]);
+  const [loadingSubinventory, setLoadingSubinventory] = useState(false);
   
   // Form fields
   const [formData, setFormData] = useState({
@@ -63,6 +75,11 @@ export default function InventarioPage() {
     anio: new Date().getFullYear(),
     tarifa_diaria: "",
     valor_inicial: "",
+  });
+  const [subFormData, setSubFormData] = useState({
+    nombre_item: "",
+    cantidad: 1,
+    descripcion: "",
   });
 
   useEffect(() => {
@@ -128,6 +145,54 @@ export default function InventarioPage() {
     } catch (error) {
       console.error("Error al crear equipo:", error);
       alert("Error al crear el equipo");
+    }
+  };
+
+  const openSubinventoryModal = async (equipment: Equipment) => {
+    setSelectedEquipment(equipment);
+    setSubinventoryDialogOpen(true);
+    setLoadingSubinventory(true);
+
+    try {
+      const items = await api.getSubinventory(equipment.id);
+      setSubinventoryItems(items);
+    } catch (error) {
+      console.error("Error al cargar subinventario:", error);
+      setSubinventoryItems([]);
+      alert("No se pudo cargar el subinventario");
+    } finally {
+      setLoadingSubinventory(false);
+    }
+  };
+
+  const handleCreateSubinventoryItem = async () => {
+    if (!selectedEquipment) return;
+    if (!subFormData.nombre_item.trim()) {
+      alert("El nombre del item es requerido");
+      return;
+    }
+    if (subFormData.cantidad < 1) {
+      alert("La cantidad debe ser mayor o igual a 1");
+      return;
+    }
+
+    try {
+      await api.createSubinventoryItem(selectedEquipment.id, {
+        nombre_item: subFormData.nombre_item.trim(),
+        cantidad: Number(subFormData.cantidad),
+        descripcion: subFormData.descripcion.trim() || undefined,
+      });
+
+      const updated = await api.getSubinventory(selectedEquipment.id);
+      setSubinventoryItems(updated);
+      setSubFormData({
+        nombre_item: "",
+        cantidad: 1,
+        descripcion: "",
+      });
+    } catch (error) {
+      console.error("Error al crear item de subinventario:", error);
+      alert("No se pudo crear el item de subinventario");
     }
   };
 
@@ -280,7 +345,11 @@ export default function InventarioPage() {
         {/* Equipment Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredEquipos.map((equipo) => (
-            <Card key={equipo.id} className="border-border bg-card hover:shadow-md transition-shadow">
+            <Card
+              key={equipo.id}
+              className="border-border bg-card hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => openSubinventoryModal(equipo)}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -323,6 +392,92 @@ export default function InventarioPage() {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={subinventoryDialogOpen}
+        onOpenChange={(open) => {
+          setSubinventoryDialogOpen(open);
+          if (!open) {
+            setSelectedEquipment(null);
+            setSubinventoryItems([]);
+            setSubFormData({ nombre_item: "", cantidad: 1, descripcion: "" });
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>Subinventario del equipo</DialogTitle>
+            <DialogDescription>
+              {selectedEquipment
+                ? `${selectedEquipment.nombre_equipo} (ID: ${selectedEquipment.id})`
+                : "Selecciona un equipo"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="sub-nombre">Nombre del item *</Label>
+              <Input
+                id="sub-nombre"
+                placeholder="Ej: Tablones laterales"
+                value={subFormData.nombre_item}
+                onChange={(e) => setSubFormData({ ...subFormData, nombre_item: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-2 col-span-1">
+                <Label htmlFor="sub-cantidad">Cantidad *</Label>
+                <Input
+                  id="sub-cantidad"
+                  type="number"
+                  min={1}
+                  value={subFormData.cantidad}
+                  onChange={(e) =>
+                    setSubFormData({
+                      ...subFormData,
+                      cantidad: Number(e.target.value || 1),
+                    })
+                  }
+                />
+              </div>
+              <div className="grid gap-2 col-span-2">
+                <Label htmlFor="sub-descripcion">Descripción</Label>
+                <Input
+                  id="sub-descripcion"
+                  placeholder="Ej: Estructura galvanizada"
+                  value={subFormData.descripcion}
+                  onChange={(e) => setSubFormData({ ...subFormData, descripcion: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleCreateSubinventoryItem}>Agregar item</Button>
+            </div>
+          </div>
+
+          <div className="border rounded-md p-3 max-h-[260px] overflow-auto">
+            {loadingSubinventory ? (
+              <p className="text-sm text-muted-foreground">Cargando subinventario...</p>
+            ) : subinventoryItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Este equipo aun no tiene items en subinventario.</p>
+            ) : (
+              <div className="space-y-2">
+                {subinventoryItems.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between border rounded-md p-2">
+                    <div>
+                      <p className="font-medium text-sm">{item.nombre_item}</p>
+                      {item.descripcion ? (
+                        <p className="text-xs text-muted-foreground">{item.descripcion}</p>
+                      ) : null}
+                    </div>
+                    <Badge variant="secondary">x{item.cantidad}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
