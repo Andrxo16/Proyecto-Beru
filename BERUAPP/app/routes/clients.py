@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -10,7 +10,13 @@ router = APIRouter(prefix="/clients", tags=["Clients"])
 
 def _refresh_client_status(client: Cliente, db: Session) -> None:
     if client.created_at:
-        is_active = client.created_at >= (datetime.now() - timedelta(days=30))
+        now = datetime.now(timezone.utc)
+        created = client.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        else:
+            created = created.astimezone(timezone.utc)
+        is_active = created >= (now - timedelta(days=30))
         client.estado = "activo" if is_active else "inactivo"
     else:
         client.estado = "activo"
@@ -51,4 +57,10 @@ def get_clients(db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=500,
             detail="No se pudieron consultar clientes. Revisa permisos del usuario de BD sobre la tabla clientes.",
+        ) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al listar clientes: {exc!s}",
         ) from exc
