@@ -3,25 +3,46 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 
-const categories = [
-  { name: "Excavadoras", total: 12, disponibles: 5 },
-  { name: "Gruas", total: 8, disponibles: 3 },
-  { name: "Retroexcavadoras", total: 15, disponibles: 9 },
-  { name: "Montacargas", total: 10, disponibles: 7 },
-  { name: "Compactadores", total: 6, disponibles: 4 },
-]
+type Equipment = {
+  categoria?: string
+  estado?: string
+}
 
-export function EquipmentAvailability() {
+type Props = {
+  equipment: Equipment[]
+}
+
+export function EquipmentAvailability({ equipment }: Props) {
+  // Agrupa los equipos por categoría y cuenta total vs disponibles
+  const categoryMap: Record<string, { total: number; disponibles: number }> = {}
+
+  equipment.forEach((item) => {
+    const cat = item.categoria || "Sin categoría"
+    if (!categoryMap[cat]) categoryMap[cat] = { total: 0, disponibles: 0 }
+    categoryMap[cat].total++
+    if (item.estado === "disponible") categoryMap[cat].disponibles++
+  })
+
+  const categories = Object.entries(categoryMap).map(([name, data]) => ({
+    name,
+    ...data,
+  }))
+
   return (
     <Card className="border-border bg-card">
       <CardHeader>
         <CardTitle className="text-lg font-semibold text-card-foreground">
-          Disponibilidad por Categoria
+          Disponibilidad por Categoría
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {categories.length === 0 && (
+          <p className="text-sm text-muted-foreground">No hay equipos registrados</p>
+        )}
         {categories.map((category) => {
-          const percentage = Math.round((category.disponibles / category.total) * 100)
+          const percentage = category.total > 0
+            ? Math.round((category.disponibles / category.total) * 100)
+            : 0
           return (
             <div key={category.name} className="space-y-2">
               <div className="flex items-center justify-between text-sm">

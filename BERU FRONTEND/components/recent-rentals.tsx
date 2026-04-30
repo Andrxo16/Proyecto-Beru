@@ -1,64 +1,45 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
-const recentRentals = [
-  {
-    id: "ALQ-001",
-    cliente: "Constructora ABC",
-    equipo: "Excavadora CAT 320",
-    fechaInicio: "15 Abr 2026",
-    fechaFin: "22 Abr 2026",
-    estado: "activo",
-  },
-  {
-    id: "ALQ-002",
-    cliente: "Obras del Norte S.A.",
-    equipo: "Grua Torre 50T",
-    fechaInicio: "14 Abr 2026",
-    fechaFin: "30 Abr 2026",
-    estado: "activo",
-  },
-  {
-    id: "ALQ-003",
-    cliente: "Minera Central",
-    equipo: "Retroexcavadora JCB",
-    fechaInicio: "10 Abr 2026",
-    fechaFin: "17 Abr 2026",
-    estado: "por-vencer",
-  },
-  {
-    id: "ALQ-004",
-    cliente: "Pavimentos Express",
-    equipo: "Rodillo Compactador",
-    fechaInicio: "08 Abr 2026",
-    fechaFin: "15 Abr 2026",
-    estado: "vencido",
-  },
-  {
-    id: "ALQ-005",
-    cliente: "Ingenieria Civil Ltda",
-    equipo: "Montacargas 5T",
-    fechaInicio: "12 Abr 2026",
-    fechaFin: "19 Abr 2026",
-    estado: "activo",
-  },
-]
+// Tipo que viene de la API
+type Rental = {
+  id: number
+  cliente?: string
+  nombre_equipo?: string
+  fecha_inicio: string
+  fecha_fin: string
+  estado: string
+}
 
-const estadoStyles = {
+// Ahora recibe los datos como props en lugar de tenerlos estáticos
+type Props = {
+  rentals: Rental[]
+}
+
+const estadoStyles: Record<string, string> = {
   activo: "bg-green-100 text-green-800",
   "por-vencer": "bg-yellow-100 text-yellow-800",
   vencido: "bg-red-100 text-red-800",
   finalizado: "bg-gray-100 text-gray-800",
 }
 
-const estadoLabels = {
+const estadoLabels: Record<string, string> = {
   activo: "Activo",
   "por-vencer": "Por Vencer",
   vencido: "Vencido",
   finalizado: "Finalizado",
 }
 
-export function RecentRentals() {
+// Formatea "2026-04-15" → "15 Abr 2026"
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("es-CO", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
+export function RecentRentals({ rentals }: Props) {
   return (
     <Card className="border-border bg-card">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -82,26 +63,31 @@ export function RecentRentals() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {recentRentals.map((rental) => (
+              {rentals.map((rental) => (
                 <tr key={rental.id} className="hover:bg-muted/50">
-                  <td className="py-3 text-sm font-medium text-card-foreground">{rental.id}</td>
-                  <td className="py-3 text-sm text-card-foreground">{rental.cliente}</td>
-                  <td className="py-3 text-sm text-muted-foreground">{rental.equipo}</td>
+                  <td className="py-3 text-sm font-medium text-card-foreground">
+                    {`ERM-${String(rental.id).padStart(3, "0")}`}
+                  </td>
+                  <td className="py-3 text-sm text-card-foreground">{rental.cliente || "Sin cliente"}</td>
+                  <td className="py-3 text-sm text-muted-foreground">{rental.nombre_equipo || "Sin equipo"}</td>
                   <td className="py-3 text-sm text-muted-foreground">
-                    {rental.fechaInicio} - {rental.fechaFin}
+                    {formatDate(rental.fecha_inicio)} - {formatDate(rental.fecha_fin)}
                   </td>
                   <td className="py-3">
-                    <Badge 
-                      variant="secondary" 
-                      className={estadoStyles[rental.estado as keyof typeof estadoStyles]}
+                    <Badge
+                      variant="secondary"
+                      className={estadoStyles[rental.estado] ?? "bg-gray-100 text-gray-800"}
                     >
-                      {estadoLabels[rental.estado as keyof typeof estadoLabels]}
+                      {estadoLabels[rental.estado] ?? rental.estado}
                     </Badge>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {rentals.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">No hay alquileres recientes</p>
+          )}
         </div>
       </CardContent>
     </Card>

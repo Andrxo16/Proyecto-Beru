@@ -1,8 +1,19 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.db.database import Base, engine
+import app.db.equipment  # noqa: F401 — registra modelos en Base.metadata
 from app.routes import equipment, clients, rentals
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 print("Clients route file:", getattr(clients, "__file__", "unknown"))
 
 app.add_middleware(

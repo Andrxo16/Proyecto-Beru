@@ -125,7 +125,7 @@ export default function AlquileresPage() {
   }, [])
 
   const filteredAlquileres = rentals.filter((alquiler) => {
-    const displayId = `ALQ-${String(alquiler.id).padStart(3, "0")}`
+    const displayId = `ERM-${String(alquiler.id).padStart(3, "0")}`
     const matchesSearch = 
       (alquiler.cliente || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (alquiler.equipo_nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -368,6 +368,23 @@ export default function AlquileresPage() {
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="mr-2 h-4 w-4" />
+                Creditos
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Crear Nuevo Crédito</DialogTitle>
+                <DialogDescription>
+                  Complete los datos del crédito.
+                </DialogDescription>
+              </DialogHeader>
+              
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Rentals Table */}
@@ -390,7 +407,7 @@ export default function AlquileresPage() {
                 {filteredAlquileres.map((alquiler) => (
                   <TableRow key={alquiler.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium text-card-foreground">
-                      {`ALQ-${String(alquiler.id).padStart(3, "0")}`}
+                      {`ERM-${String(alquiler.id).padStart(3, "0")}`}
                     </TableCell>
                     <TableCell className="text-card-foreground">{alquiler.cliente || "Sin cliente"}</TableCell>
                     <TableCell className="text-muted-foreground">{alquiler.equipo_nombre || "Equipo"}</TableCell>
@@ -416,7 +433,7 @@ export default function AlquileresPage() {
                         onClick={() => handleCloseInvoice(alquiler.id)}
                       >
                         <CheckCircle2 className="mr-1 h-4 w-4" />
-                        {alquiler.estado === "facturado" ? "Facturado" : "Cerrar factura"}
+                        {alquiler.estado === "facturado" ? "Facturado" : "Liquidar remisión"}
                       </Button>
                     </TableCell>
                   </TableRow>
