@@ -66,7 +66,7 @@ export function RecentRentals({ rentals }: Props) {
               {rentals.map((rental) => (
                 <tr key={rental.id} className="hover:bg-muted/50">
                   <td className="py-3 text-sm font-medium text-card-foreground">
-                    {`ALQ-${String(rental.id).padStart(3, "0")}`}
+                    {`ERM-${String(rental.id).padStart(3, "0")}`}
                   </td>
                   <td className="py-3 text-sm text-card-foreground">{rental.cliente || "Sin cliente"}</td>
                   <td className="py-3 text-sm text-muted-foreground">{rental.nombre_equipo || "Sin equipo"}</td>
