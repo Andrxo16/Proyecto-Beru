@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, Search, Users, Phone, Mail } from "lucide-react"
+import { Plus, Search, Users } from "lucide-react"
 import * as api from "@/lib/api"
 import {
   Table,
@@ -31,6 +31,10 @@ type Client = {
   nombre: string
   correo?: string | null
   telefono?: string | null
+  direccion?: string | null
+  nit_documento?: string | null
+  celular?: string | null
+  ciudad?: string | null
   numero_alquileres: number
   estado: "activo" | "inactivo"
 }
@@ -39,11 +43,16 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     nombre: "",
     correo: "",
     telefono: "",
+    direccion: "",
+    nit_documento: "",
+    celular: "",
+    ciudad: "",
   })
 
   const loadClients = async () => {
@@ -76,9 +85,21 @@ export default function ClientesPage() {
         nombre: formData.nombre.trim(),
         correo: formData.correo.trim() || undefined,
         telefono: formData.telefono.trim() || undefined,
+        direccion: formData.direccion.trim() || undefined,
+        nit_documento: formData.nit_documento.trim() || undefined,
+        celular: formData.celular.trim() || undefined,
+        ciudad: formData.ciudad.trim() || undefined,
       })
       await loadClients()
-      setFormData({ nombre: "", correo: "", telefono: "" })
+      setFormData({
+        nombre: "",
+        correo: "",
+        telefono: "",
+        direccion: "",
+        nit_documento: "",
+        celular: "",
+        ciudad: "",
+      })
       setDialogOpen(false)
     } catch (error) {
       console.error("Error al crear cliente:", error)
@@ -123,12 +144,41 @@ export default function ClientesPage() {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="empresa">Nombre de Empresa</Label>
+                  <Label htmlFor="nombre">Nombre</Label>
                   <Input
-                    id="empresa"
-                    placeholder="Ej: Constructora ABC S.A."
+                    id="nombre"
+                    placeholder="Ej: Juan Perez"
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="nit_documento">NIT o Numero de Documento</Label>
+                    <Input
+                      id="nit_documento"
+                      placeholder="Ej: 900123456-7"
+                      value={formData.nit_documento}
+                      onChange={(e) => setFormData({ ...formData, nit_documento: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="ciudad">Ciudad</Label>
+                    <Input
+                      id="ciudad"
+                      placeholder="Ej: Bogota"
+                      value={formData.ciudad}
+                      onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="direccion">Direccion</Label>
+                  <Input
+                    id="direccion"
+                    placeholder="Ej: Calle 10 # 20 - 30"
+                    value={formData.direccion}
+                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -152,6 +202,15 @@ export default function ClientesPage() {
                     />
                   </div>
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="celular">Celular</Label>
+                  <Input
+                    id="celular"
+                    placeholder="Ej: 3001234567"
+                    value={formData.celular}
+                    onChange={(e) => setFormData({ ...formData, celular: e.target.value })}
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -174,19 +233,21 @@ export default function ClientesPage() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>ID</TableHead>
                   <TableHead>Cliente</TableHead>
-                  <TableHead>Correo</TableHead>
-                  <TableHead>Telefono</TableHead>
+                  <TableHead>Ciudad</TableHead>
                   <TableHead>Alquileres</TableHead>
                   <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredClientes.map((cliente) => (
-                  <TableRow key={cliente.id}>
+                  <TableRow
+                    key={cliente.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedClient(cliente)}
+                  >
                     <TableCell className="font-medium">{`CLI-${String(cliente.id).padStart(3, "0")}`}</TableCell>
                     <TableCell>{cliente.nombre}</TableCell>
-                    <TableCell>{cliente.correo || "Sin correo"}</TableCell>
-                    <TableCell>{cliente.telefono || "Sin telefono"}</TableCell>
+                    <TableCell>{cliente.ciudad || "Sin ciudad"}</TableCell>
                     <TableCell>{cliente.numero_alquileres}</TableCell>
                     <TableCell>
                       <Badge
@@ -202,6 +263,61 @@ export default function ClientesPage() {
             </Table>
           </CardContent>
         </Card>
+
+        <Dialog open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Detalle del cliente</DialogTitle>
+              <DialogDescription>
+                Informacion completa del cliente seleccionado.
+              </DialogDescription>
+            </DialogHeader>
+            {selectedClient && (
+              <div className="grid grid-cols-2 gap-4 py-2 text-sm">
+                <div>
+                  <p className="text-muted-foreground">ID</p>
+                  <p>{`CLI-${String(selectedClient.id).padStart(3, "0")}`}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Nombre</p>
+                  <p>{selectedClient.nombre}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Correo</p>
+                  <p>{selectedClient.correo || "Sin correo"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Telefono</p>
+                  <p>{selectedClient.telefono || "Sin telefono"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Celular</p>
+                  <p>{selectedClient.celular || "Sin celular"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">NIT / Documento</p>
+                  <p>{selectedClient.nit_documento || "Sin documento"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Ciudad</p>
+                  <p>{selectedClient.ciudad || "Sin ciudad"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Direccion</p>
+                  <p>{selectedClient.direccion || "Sin direccion"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Alquileres</p>
+                  <p>{selectedClient.numero_alquileres}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Estado</p>
+                  <p>{selectedClient.estado === "activo" ? "Activo" : "Inactivo"}</p>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {filteredClientes.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">

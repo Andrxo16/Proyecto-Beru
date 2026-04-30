@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.equipment import Cliente
 from app.schemas.equipment import ClientCreate, ClientResponse
+from auth.security import require_permission
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -23,12 +24,20 @@ def _refresh_client_status(client: Cliente, db: Session) -> None:
 
 
 @router.post("/", response_model=ClientResponse)
-def create_client(client: ClientCreate, db: Session = Depends(get_db)):
+def create_client(
+    client: ClientCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_clients")),
+):
     try:
         new_client = Cliente(
             nombre=client.nombre,
             correo=client.correo,
             telefono=client.telefono,
+            direccion=client.direccion,
+            nit_documento=client.nit_documento,
+            celular=client.celular,
+            ciudad=client.ciudad,
             numero_alquileres=0,
             estado="activo",
         )
@@ -45,7 +54,10 @@ def create_client(client: ClientCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[ClientResponse])
-def get_clients(db: Session = Depends(get_db)):
+def get_clients(
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_clients")),
+):
     try:
         clients = db.query(Cliente).order_by(Cliente.id.desc()).all()
         for client in clients:

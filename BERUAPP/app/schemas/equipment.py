@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EquipmentCreate(BaseModel):
@@ -85,6 +85,10 @@ class ClientCreate(BaseModel):
     nombre: str
     correo: Optional[str] = None
     telefono: Optional[str] = None
+    direccion: Optional[str] = None
+    nit_documento: Optional[str] = None
+    celular: Optional[str] = None
+    ciudad: Optional[str] = None
 
 
 class ClientResponse(BaseModel):
@@ -92,9 +96,53 @@ class ClientResponse(BaseModel):
     nombre: str
     correo: Optional[str] = None
     telefono: Optional[str] = None
+    direccion: Optional[str] = None
+    nit_documento: Optional[str] = None
+    celular: Optional[str] = None
+    ciudad: Optional[str] = None
     numero_alquileres: int = 0
     estado: str = "activo"
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class UserPermissions(BaseModel):
+    can_dashboard: bool = False
+    can_inventory: bool = False
+    can_warehouse: bool = False
+    can_clients: bool = False
+    can_rentals: bool = False
+    can_permissions: bool = False
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    activo: bool = True
+    permissions: UserPermissions = Field(default_factory=UserPermissions)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserUpdatePermissions(BaseModel):
+    activo: bool
+    permissions: UserPermissions
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    activo: bool = True
+    permissions: UserPermissions
+    created_at: Optional[datetime] = None
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

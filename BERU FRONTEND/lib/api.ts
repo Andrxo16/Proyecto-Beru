@@ -1,3 +1,4 @@
+import { getAuthToken, SessionPayload, UserPermissions } from "@/lib/auth";
 /**
  * Base del API.
  * - Sin `NEXT_PUBLIC_API_URL`: en el navegador se usa `/api/proxy` (route handler → FastAPI) para evitar CORS y fallos con localhost/IPv6.
@@ -86,10 +87,34 @@ type ClientPayload = {
   nombre: string;
   correo?: string;
   telefono?: string;
+  direccion?: string;
+  nit_documento?: string;
+  celular?: string;
+  ciudad?: string;
 };
 
+type UserPayload = {
+  username: string;
+  password: string;
+  activo: boolean;
+  permissions: UserPermissions;
+};
+
+type UserPermissionUpdatePayload = {
+  activo: boolean;
+  permissions: UserPermissions;
+};
+
+function authHeaders(extra?: Record<string, string>): HeadersInit {
+  const token = getAuthToken();
+  return {
+    ...(extra || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 export async function getEquipment() {
-  const res = await fetch(`${apiRoot()}/equipment/`, { cache: "no-store" });
+  const res = await fetch(`${apiRoot()}/equipment/`, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) await failResponse(res, "No se pudo consultar el inventario");
 
   const data = await res.json();
@@ -103,9 +128,9 @@ export async function getEquipment() {
 export async function createEquipment(data: EquipmentPayload) {
   const res = await fetch(`${apiRoot()}/equipment/`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(data),
   });
 
@@ -117,6 +142,7 @@ export async function createEquipment(data: EquipmentPayload) {
 export async function getSubinventory(equipmentId: number) {
   const res = await fetch(`${apiRoot()}/equipment/${equipmentId}/subinventory`, {
     cache: "no-store",
+    headers: authHeaders(),
   });
   if (!res.ok) await failResponse(res, "No se pudo consultar el subinventario");
   return res.json();
@@ -128,9 +154,9 @@ export async function createSubinventoryItem(
 ) {
   const res = await fetch(`${apiRoot()}/equipment/${equipmentId}/subinventory`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(data),
   });
   if (!res.ok) await failResponse(res, "No se pudo crear el item del subinventario");
@@ -138,7 +164,7 @@ export async function createSubinventoryItem(
 }
 
 export async function getRentals() {
-  const res = await fetch(`${apiRoot()}/rentals/`, { cache: "no-store" });
+  const res = await fetch(`${apiRoot()}/rentals/`, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) await failResponse(res, "No se pudieron consultar los alquileres");
   const data = await res.json();
   return (Array.isArray(data) ? data : []).map((item) => ({
@@ -153,9 +179,9 @@ export async function getRentals() {
 export async function createRental(data: RentalPayload) {
   const res = await fetch(`${apiRoot()}/rentals/`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(data),
   });
   if (!res.ok) await failResponse(res, "No se pudo crear el alquiler");
@@ -165,13 +191,41 @@ export async function createRental(data: RentalPayload) {
 export async function closeRentalInvoice(rentalId: number) {
   const res = await fetch(`${apiRoot()}/rentals/${rentalId}/invoice-close`, {
     method: "PATCH",
+    headers: authHeaders(),
   });
   if (!res.ok) await failResponse(res, "No se pudo cerrar/facturar el alquiler");
   return res.json();
 }
 
+export async function dispatchRental(rentalId: number) {
+  const res = await fetch(`${apiRoot()}/rentals/${rentalId}/dispatch`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo registrar la salida de bodega");
+  return res.json();
+}
+
+export async function returnRental(rentalId: number) {
+  const res = await fetch(`${apiRoot()}/rentals/${rentalId}/return`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo registrar la devolucion a bodega");
+  return res.json();
+}
+
+export async function partialLiquidation(rentalId: number) {
+  const res = await fetch(`${apiRoot()}/rentals/${rentalId}/partial-liquidation`, {
+    method: "PATCH",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo aplicar la liquidacion parcial");
+  return res.json();
+}
+
 export async function getClients() {
-  const res = await fetch(`${apiRoot()}/clients/`, { cache: "no-store" });
+  const res = await fetch(`${apiRoot()}/clients/`, { cache: "no-store", headers: authHeaders() });
   if (!res.ok) await failResponse(res, "No se pudieron consultar los clientes");
   return res.json();
 }
@@ -179,13 +233,61 @@ export async function getClients() {
 export async function createClient(data: ClientPayload) {
   const res = await fetch(`${apiRoot()}/clients/`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(data),
   });
 
   if (!res.ok) await failResponse(res, "No se pudo crear el cliente");
 
+  return res.json();
+}
+
+export async function login(username: string, password: string): Promise<SessionPayload> {
+  const res = await fetch(`${apiRoot()}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo iniciar sesion");
+  return res.json();
+}
+
+export async function getCurrentUser() {
+  const res = await fetch(`${apiRoot()}/auth/me`, {
+    cache: "no-store",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo validar la sesion");
+  return res.json();
+}
+
+export async function getUsers() {
+  const res = await fetch(`${apiRoot()}/users/`, {
+    cache: "no-store",
+    headers: authHeaders(),
+  });
+  if (!res.ok) await failResponse(res, "No se pudieron consultar usuarios");
+  return res.json();
+}
+
+export async function createUser(payload: UserPayload) {
+  const res = await fetch(`${apiRoot()}/users/`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo crear el usuario");
+  return res.json();
+}
+
+export async function updateUserPermissions(userId: number, payload: UserPermissionUpdatePayload) {
+  const res = await fetch(`${apiRoot()}/users/${userId}`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await failResponse(res, "No se pudo actualizar el usuario");
   return res.json();
 }

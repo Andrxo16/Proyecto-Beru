@@ -37,7 +37,7 @@ type Rental = {
   dias: number
   tarifa_diaria: number
   total: number
-  estado: "activo" | "por-vencer" | "vencido" | "facturado"
+  estado: "activo" | "por-vencer" | "vencido" | "facturado" | "pendiente-salida" | "devuelto" | "liquidacion-parcial"
   facturado?: boolean
   cliente?: string | null
   equipo_nombre?: string | null
@@ -60,6 +60,9 @@ const estadoStyles = {
   "por-vencer": "bg-yellow-100 text-yellow-800",
   vencido: "bg-red-100 text-red-800",
   facturado: "bg-blue-100 text-blue-800",
+  "pendiente-salida": "bg-slate-100 text-slate-800",
+  devuelto: "bg-purple-100 text-purple-800",
+  "liquidacion-parcial": "bg-orange-100 text-orange-800",
 }
 
 const estadoLabels = {
@@ -67,6 +70,9 @@ const estadoLabels = {
   "por-vencer": "Por Vencer",
   vencido: "Vencido",
   facturado: "Facturado",
+  "pendiente-salida": "Pendiente de salida",
+  devuelto: "Devuelto",
+  "liquidacion-parcial": "Liquidacion parcial",
 }
 
 function formatDate(dateString: string) {
@@ -187,6 +193,16 @@ export default function AlquileresPage() {
     }
   }
 
+  const handlePartialLiquidation = async (rentalId: number) => {
+    try {
+      await api.partialLiquidation(rentalId)
+      await loadData()
+    } catch (error) {
+      console.error("Error en liquidacion parcial:", error)
+      alert("No se pudo aplicar la liquidacion parcial")
+    }
+  }
+
   return (
     <div className="flex flex-col">
       <Header 
@@ -250,9 +266,12 @@ export default function AlquileresPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los Estados</SelectItem>
+                <SelectItem value="pendiente-salida">Pendiente de salida</SelectItem>
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="por-vencer">Por Vencer</SelectItem>
                 <SelectItem value="vencido">Vencido</SelectItem>
+                <SelectItem value="devuelto">Devuelto</SelectItem>
+                <SelectItem value="liquidacion-parcial">Liquidacion parcial</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -425,16 +444,31 @@ export default function AlquileresPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant={alquiler.estado === "facturado" ? "outline" : "default"}
-                        className={alquiler.estado === "facturado" ? "" : "bg-green-600 text-white hover:bg-green-700"}
-                        disabled={alquiler.estado === "facturado"}
-                        onClick={() => handleCloseInvoice(alquiler.id)}
-                      >
-                        <CheckCircle2 className="mr-1 h-4 w-4" />
-                        {alquiler.estado === "facturado" ? "Facturado" : "Liquidar remisión"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={alquiler.estado === "facturado" ? "outline" : "default"}
+                          className={alquiler.estado === "facturado" ? "" : "bg-green-600 text-white hover:bg-green-700"}
+                          disabled={alquiler.estado === "facturado"}
+                          onClick={() => handleCloseInvoice(alquiler.id)}
+                        >
+                          <CheckCircle2 className="mr-1 h-4 w-4" />
+                          {alquiler.estado === "facturado" ? "Facturado" : "Liquidar remision"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            alquiler.estado === "facturado" ||
+                            alquiler.estado === "pendiente-salida" ||
+                            alquiler.estado === "devuelto" ||
+                            alquiler.estado === "liquidacion-parcial"
+                          }
+                          onClick={() => handlePartialLiquidation(alquiler.id)}
+                        >
+                          {alquiler.estado === "liquidacion-parcial" ? "Conteo detenido" : "Liquidacion parcial"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

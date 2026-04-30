@@ -7,8 +7,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'RentaEquip - ERP de Alquiler de Maquinaria',
-  description: 'Sistema de gestión para alquiler de equipos y maquinaria',
+  title: 'Beru Sistem - ERP de Alquiler de Maquinaria',
+  description: 'Sistema de gestion para alquiler de equipos y maquinaria',
   generator: 'v0.app',
   icons: {
     icon: [

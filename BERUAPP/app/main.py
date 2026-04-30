@@ -2,14 +2,19 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import SQLAlchemyError
 from app.db.database import Base, engine
 import app.db.equipment  # noqa: F401 — registra modelos en Base.metadata
-from app.routes import equipment, clients, rentals
+from app.routes import auth, clients, equipment, rentals, users
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except SQLAlchemyError as exc:
+        # El usuario actual de BD puede no tener permiso DDL; la app sigue usando tablas ya existentes.
+        print(f"[WARN] No se pudo ejecutar create_all: {exc}")
     yield
 
 
@@ -27,6 +32,8 @@ app.add_middleware(
 app.include_router(equipment.router)
 app.include_router(clients.router)
 app.include_router(rentals.router)
+app.include_router(auth.router)
+app.include_router(users.router)
 
 @app.get("/")
 def root():

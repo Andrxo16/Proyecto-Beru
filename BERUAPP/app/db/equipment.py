@@ -71,8 +71,28 @@ class Cliente(Base):
     nombre = Column(String(150), nullable=False)
     correo = Column(String(150))
     telefono = Column(String(30))
+    direccion = Column(String(255))
+    nit_documento = Column(String(50))
+    celular = Column(String(30))
+    ciudad = Column(String(100))
     numero_alquileres = Column(Integer, default=0)
     estado = Column(String(20), default="activo")
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
     rentas = relationship("Renta", back_populates="cliente")
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(80), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    activo = Column(Boolean, default=True)
+    can_dashboard = Column(Boolean, default=False)
+    can_inventory = Column(Boolean, default=False)
+    can_warehouse = Column(Boolean, default=False)
+    can_clients = Column(Boolean, default=False)
+    can_rentals = Column(Boolean, default=False)
+    can_permissions = Column(Boolean, default=False)
+    created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))

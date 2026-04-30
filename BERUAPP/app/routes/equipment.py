@@ -9,11 +9,16 @@ from app.schemas.equipment import (
     SubinventoryCreate,
     SubinventoryResponse,
 )
+from auth.security import require_permission
 
 router = APIRouter(prefix="/equipment", tags=["Equipment"])
 
 @router.post("/", response_model=EquipmentResponse)
-def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
+def create_equipment(
+    equipment: EquipmentCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_inventory")),
+):
     new_equipment = Inventario(**equipment.model_dump())
     db.add(new_equipment)
     db.commit()
@@ -22,13 +27,20 @@ def create_equipment(equipment: EquipmentCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=List[EquipmentResponse])
-def get_equipment(db: Session = Depends(get_db)):
+def get_equipment(
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_inventory")),
+):
     items = db.query(Inventario).order_by(Inventario.id.desc()).all()
     return items
 
 
 @router.get("/{equipment_id}/subinventory", response_model=List[SubinventoryResponse])
-def get_subinventory_by_equipment(equipment_id: int, db: Session = Depends(get_db)):
+def get_subinventory_by_equipment(
+    equipment_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_inventory")),
+):
     equipment = db.query(Inventario).filter(Inventario.id == equipment_id).first()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipo no encontrado")
@@ -47,6 +59,7 @@ def create_subinventory_item(
     equipment_id: int,
     payload: SubinventoryCreate,
     db: Session = Depends(get_db),
+    _=Depends(require_permission("can_inventory")),
 ):
     equipment = db.query(Inventario).filter(Inventario.id == equipment_id).first()
     if not equipment:

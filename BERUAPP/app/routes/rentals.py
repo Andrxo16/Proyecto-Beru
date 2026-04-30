@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.db.equipment import Cliente, Inventario, Renta
 from app.schemas.equipment import RentalCreate, RentalResponse
+from auth.security import require_permission
 
 router = APIRouter(prefix="/rentals", tags=["Rentals"])
 
@@ -12,16 +13,11 @@ def _compute_days(start: datetime, end: datetime) -> int:
     days = (end.date() - start.date()).days
     return max(days, 1)
 
-def _compute_effective_end(start: datetime, planned_end: datetime, facturado: bool) -> datetime:
+def _compute_effective_end() -> datetime:
     """
-    If rental is overdue and not billed yet, bill up to current day.
+    Ongoing rentals are billed by elapsed days only (up to today).
     """
-    if facturado:
-        return planned_end
-    now_day = datetime.now().date()
-    if now_day > planned_end.date():
-        return datetime.combine(now_day, time.min)
-    return planned_end
+    return datetime.combine(datetime.now().date(), time.min)
 
 
 def _compute_billing_end_for_closure(start: datetime) -> datetime:
@@ -49,7 +45,11 @@ def _append_history(equipment: Inventario, message: str) -> None:
 
 
 @router.post("/", response_model=RentalResponse)
-def create_rental(rental: RentalCreate, db: Session = Depends(get_db)):
+def create_rental(
+    rental: RentalCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_rentals")),
+):
     equipment = db.query(Inventario).filter(Inventario.id == rental.inventario_id).first()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipo no encontrado")
@@ -84,7 +84,8 @@ def create_rental(rental: RentalCreate, db: Session = Depends(get_db)):
     )
     db.add(new_rental)
 
-    equipment.estado = "prestamo"
+    # El alquiler se crea en espera de despacho desde bodega.
+    equipment.estado = "reservado"
     if rental.ubicacion:
         equipment.ubicacion = rental.ubicacion.strip()
     history_note = (
@@ -119,7 +120,7 @@ def create_rental(rental: RentalCreate, db: Session = Depends(get_db)):
         deposito=new_rental.deposito,
         dias=new_rental.dias,
         total=new_rental.total,
-        estado=status,
+        estado="pendiente-salida",
         facturado=bool(new_rental.facturado),
         cliente=client.nombre if client else rental.cliente,
         equipo_nombre=equipment.nombre_equipo,
@@ -127,7 +128,10 @@ def create_rental(rental: RentalCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/", response_model=list[RentalResponse])
-def get_rentals(db: Session = Depends(get_db)):
+def get_rentals(
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_rentals")),
+):
     items = db.query(Renta).order_by(Renta.id.desc()).all()
     results: list[RentalResponse] = []
     for rental in items:
@@ -136,29 +140,40 @@ def get_rentals(db: Session = Depends(get_db)):
             continue
         client = db.query(Cliente).filter(Cliente.id == rental.cliente_id).first() if rental.cliente_id else None
 
-        effective_end = _compute_effective_end(
-            rental.fecha_inicio,
-            rental.fecha_fin,
-            bool(rental.facturado),
-        ) if rental.fecha_fin else rental.fecha_inicio
-        recalculated_days = _compute_days(rental.fecha_inicio, effective_end)
-        recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
+        if rental.facturado:
+            status = "facturado"
+            recalculated_days = rental.dias or 0
+            recalculated_total = rental.total or Decimal(0)
+            equipment.estado = "disponible"
+        elif equipment.estado == "reservado":
+            status = "pendiente-salida"
+            recalculated_days = 0
+            recalculated_total = Decimal(0)
+        elif equipment.estado == "disponible":
+            # Devuelto sin facturar: se mantiene congelado el total hasta cierre.
+            status = "devuelto"
+            recalculated_days = rental.dias or 0
+            recalculated_total = rental.total or Decimal(0)
+        elif rental.fecha_facturacion:
+            # Liquidacion parcial: se congela el conteo aunque no exista devolucion fisica.
+            cutoff = datetime.combine(rental.fecha_facturacion.date(), time.min)
+            recalculated_days = _compute_days(rental.fecha_inicio, cutoff)
+            recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
+            status = "liquidacion-parcial"
+        else:
+            effective_end = _compute_effective_end()
+            recalculated_days = _compute_days(rental.fecha_inicio, effective_end)
+            recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
+            status = _compute_rental_status(rental.fecha_fin) if rental.fecha_fin else "activo"
+            if status == "vencido":
+                equipment.estado = "mantenimiento"
+            elif status in ("activo", "por-vencer"):
+                equipment.estado = "prestamo"
+
         if rental.dias != recalculated_days:
             rental.dias = recalculated_days
         if rental.total != recalculated_total:
             rental.total = recalculated_total
-
-        if rental.facturado:
-            status = "facturado"
-        else:
-            status = _compute_rental_status(rental.fecha_fin) if rental.fecha_fin else "activo"
-
-        if status == "vencido":
-            equipment.estado = "mantenimiento"
-        elif status in ("activo", "por-vencer"):
-            equipment.estado = "prestamo"
-        elif status == "facturado":
-            equipment.estado = "disponible"
 
         results.append(
             RentalResponse(
@@ -182,8 +197,174 @@ def get_rentals(db: Session = Depends(get_db)):
     return results
 
 
+@router.patch("/{rental_id}/dispatch", response_model=RentalResponse)
+def dispatch_rental(
+    rental_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_warehouse")),
+):
+    rental = db.query(Renta).filter(Renta.id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Alquiler no encontrado")
+
+    equipment = db.query(Inventario).filter(Inventario.id == rental.inventario_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    if rental.facturado:
+        raise HTTPException(status_code=400, detail="El alquiler ya fue facturado")
+
+    if equipment.estado != "reservado":
+        raise HTTPException(status_code=400, detail="Solo se pueden despachar alquileres pendientes")
+
+    start_dt = datetime.combine(datetime.now().date(), time.min)
+    rental.fecha_inicio = start_dt
+    if rental.fecha_fin and rental.fecha_fin <= start_dt:
+        rental.fecha_fin = datetime.combine(datetime.now().date(), time.max)
+    rental.dias = 1
+    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+    equipment.estado = "prestamo"
+
+    _append_history(
+        equipment,
+        f"{datetime.now().strftime('%Y-%m-%d')}: Salida de bodega en alquiler #{rental.id}",
+    )
+
+    db.commit()
+    db.refresh(rental)
+    db.refresh(equipment)
+    client = db.query(Cliente).filter(Cliente.id == rental.cliente_id).first() if rental.cliente_id else None
+    status = _compute_rental_status(rental.fecha_fin) if rental.fecha_fin else "activo"
+    return RentalResponse(
+        id=rental.id,
+        inventario_id=rental.inventario_id,
+        cliente_id=rental.cliente_id,
+        fecha_inicio=rental.fecha_inicio,
+        fecha_fin=rental.fecha_fin,
+        tarifa_diaria=rental.tarifa_diaria,
+        deposito=rental.deposito,
+        dias=rental.dias,
+        total=rental.total,
+        estado=status,
+        facturado=False,
+        cliente=client.nombre if client else None,
+        equipo_nombre=equipment.nombre_equipo,
+    )
+
+
+@router.patch("/{rental_id}/return", response_model=RentalResponse)
+def return_rental(
+    rental_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_warehouse")),
+):
+    rental = db.query(Renta).filter(Renta.id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Alquiler no encontrado")
+
+    equipment = db.query(Inventario).filter(Inventario.id == rental.inventario_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    if rental.facturado:
+        raise HTTPException(status_code=400, detail="El alquiler ya fue facturado")
+
+    if equipment.estado != "prestamo":
+        raise HTTPException(status_code=400, detail="Solo se pueden devolver equipos despachados")
+
+    return_dt = datetime.combine(datetime.now().date(), time.min)
+    rental.fecha_fin = return_dt
+    rental.dias = _compute_days(rental.fecha_inicio, return_dt)
+    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+    equipment.estado = "disponible"
+
+    _append_history(
+        equipment,
+        f"{datetime.now().strftime('%Y-%m-%d')}: Devolucion a bodega en alquiler #{rental.id} "
+        f"({rental.dias} dias, total {rental.total})",
+    )
+
+    db.commit()
+    db.refresh(rental)
+    db.refresh(equipment)
+    client = db.query(Cliente).filter(Cliente.id == rental.cliente_id).first() if rental.cliente_id else None
+    return RentalResponse(
+        id=rental.id,
+        inventario_id=rental.inventario_id,
+        cliente_id=rental.cliente_id,
+        fecha_inicio=rental.fecha_inicio,
+        fecha_fin=rental.fecha_fin,
+        tarifa_diaria=rental.tarifa_diaria,
+        deposito=rental.deposito,
+        dias=rental.dias,
+        total=rental.total,
+        estado="devuelto",
+        facturado=False,
+        cliente=client.nombre if client else None,
+        equipo_nombre=equipment.nombre_equipo,
+    )
+
+
+@router.patch("/{rental_id}/partial-liquidation", response_model=RentalResponse)
+def partial_liquidation(
+    rental_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_rentals")),
+):
+    rental = db.query(Renta).filter(Renta.id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Alquiler no encontrado")
+
+    equipment = db.query(Inventario).filter(Inventario.id == rental.inventario_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    if rental.facturado:
+        raise HTTPException(status_code=400, detail="El alquiler ya fue facturado")
+    if equipment.estado not in ("prestamo", "mantenimiento"):
+        raise HTTPException(status_code=400, detail="La liquidacion parcial aplica solo a equipos fuera de bodega")
+    if rental.fecha_facturacion:
+        raise HTTPException(status_code=400, detail="La liquidacion parcial ya fue registrada")
+
+    cutoff = datetime.combine(datetime.now().date(), time.min)
+    rental.fecha_facturacion = datetime.now()
+    rental.dias = _compute_days(rental.fecha_inicio, cutoff)
+    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+
+    _append_history(
+        equipment,
+        f"{datetime.now().strftime('%Y-%m-%d')}: Liquidacion parcial en alquiler #{rental.id} "
+        f"({rental.dias} dias, total {rental.total})",
+    )
+
+    db.commit()
+    db.refresh(rental)
+    db.refresh(equipment)
+    client = db.query(Cliente).filter(Cliente.id == rental.cliente_id).first() if rental.cliente_id else None
+
+    return RentalResponse(
+        id=rental.id,
+        inventario_id=rental.inventario_id,
+        cliente_id=rental.cliente_id,
+        fecha_inicio=rental.fecha_inicio,
+        fecha_fin=rental.fecha_fin,
+        tarifa_diaria=rental.tarifa_diaria,
+        deposito=rental.deposito,
+        dias=rental.dias,
+        total=rental.total,
+        estado="liquidacion-parcial",
+        facturado=False,
+        cliente=client.nombre if client else None,
+        equipo_nombre=equipment.nombre_equipo,
+    )
+
+
 @router.patch("/{rental_id}/invoice-close", response_model=RentalResponse)
-def close_rental_invoice(rental_id: int, db: Session = Depends(get_db)):
+def close_rental_invoice(
+    rental_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_permission("can_rentals")),
+):
     rental = db.query(Renta).filter(Renta.id == rental_id).first()
     if not rental:
         raise HTTPException(status_code=404, detail="Alquiler no encontrado")
@@ -210,9 +391,14 @@ def close_rental_invoice(rental_id: int, db: Session = Depends(get_db)):
             equipo_nombre=equipment.nombre_equipo,
         )
 
-    effective_end = _compute_billing_end_for_closure(rental.fecha_inicio)
-    rental.dias = _compute_days(rental.fecha_inicio, effective_end)
-    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+    if equipment.estado == "disponible" or rental.fecha_facturacion:
+        # Si ya hay devolucion en bodega o liquidacion parcial, se conserva el total congelado.
+        rental.dias = rental.dias or 0
+        rental.total = rental.total or Decimal(0)
+    else:
+        effective_end = _compute_billing_end_for_closure(rental.fecha_inicio)
+        rental.dias = _compute_days(rental.fecha_inicio, effective_end)
+        rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
     rental.facturado = True
     rental.fecha_facturacion = datetime.now()
 

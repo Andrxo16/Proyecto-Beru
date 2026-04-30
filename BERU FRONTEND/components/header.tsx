@@ -1,6 +1,7 @@
 "use client"
 
 import { Bell, Search, User } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { clearSession, getSession } from "@/lib/auth"
 
 interface HeaderProps {
   title: string
@@ -18,6 +20,14 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const router = useRouter()
+  const session = getSession()
+
+  const handleLogout = () => {
+    clearSession()
+    router.replace("/login")
+  }
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background px-6">
       <div>
@@ -50,7 +60,9 @@ export function Header({ title, subtitle }: HeaderProps) {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
                 <User className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="hidden text-sm font-medium md:block">Admin</span>
+              <span className="hidden text-sm font-medium md:block">
+                {session?.user.username || "Usuario"}
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
@@ -59,7 +71,7 @@ export function Header({ title, subtitle }: HeaderProps) {
             <DropdownMenuItem>Perfil</DropdownMenuItem>
             <DropdownMenuItem>Configuracion</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Cerrar Sesion</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>Cerrar Sesion</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
