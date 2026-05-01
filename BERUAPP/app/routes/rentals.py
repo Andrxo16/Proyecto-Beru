@@ -357,7 +357,12 @@ def dispatch_rental(
     if rental.fecha_fin and rental.fecha_fin <= start_dt:
         rental.fecha_fin = datetime.combine(datetime.now().date(), time.max)
     rental.dias = 1
-    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+
+    subtotal = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+    iva = subtotal * Decimal("0.19")  # 19%
+    retefuente = subtotal * Decimal("0.025")  # 2.5%
+
+    rental.total = subtotal + iva - retefuente
     rental.salida_bodega_registrada = True
     rental.fecha_salida_bodega = start_dt
     equipment.estado = "prestamo"
@@ -523,9 +528,14 @@ def close_rental_invoice(
     else:
         effective_end = _compute_billing_end_for_closure(rental.fecha_inicio)
         rental.dias = _compute_days(rental.fecha_inicio, effective_end)
-        rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
-    rental.facturado = True
-    rental.fecha_facturacion = datetime.now()
+        subtotal = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+
+        iva = subtotal * Decimal("0.19")
+        retefuente = subtotal * Decimal("0.025")
+
+        rental.total = subtotal + iva - retefuente
+        rental.facturado = True
+        rental.fecha_facturacion = datetime.now()
 
     equipment.estado = "disponible"
     _append_history(
