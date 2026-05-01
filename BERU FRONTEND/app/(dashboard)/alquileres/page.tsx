@@ -106,6 +106,9 @@ export default function AlquileresPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [clientSearch, setClientSearch] = useState("")
+  const [aplicarIVA, setAplicarIVA] = useState(false)
+  const [aplicarReteFuente, setAplicarReteFuente] = useState(false)
+  const [porcentajeReteFuente, setPorcentajeReteFuente] = useState(2.5) 
 
   const [formData, setFormData] = useState({
     cliente_id: "",
@@ -304,6 +307,7 @@ export default function AlquileresPage() {
               </SelectContent>
             </Select>
           </div>
+          
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
@@ -391,6 +395,46 @@ export default function AlquileresPage() {
                     onChange={(e) => setFormData({ ...formData, deposito: e.target.value })}
                   />
                 </div>
+                <div className="space-y-3 mt-4">
+
+                {/* IVA */} 
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={aplicarIVA}
+                    onChange={(e) => setAplicarIVA(e.target.checked)}
+                  />
+                  Aplicar IVA (19%)
+                </label>
+
+                {/* RETEFUENTE */}
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={aplicarReteFuente}
+                    onChange={(e) => setAplicarReteFuente(e.target.checked)}
+                  />
+                  Aplicar ReteFuente
+                </label>
+
+                {aplicarReteFuente && (
+                  <div className="flex items-center gap-2 ml-6">
+                    <span>%</span>
+                    <input
+                      type="number"
+                      value={porcentajeReteFuente}
+                      onChange={(e) => {
+                        const value = Number(e.target.value)
+                        if (value >= 0 && value <= 100) {
+                          setPorcentajeReteFuente(value)
+                        }
+                      }}
+                      className="border px-2 py-1 rounded w-24"
+                    />
+                  </div>
+                )}
+
+              </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="fechaInicio">Fecha Inicio</Label>
