@@ -1,19 +1,9 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
-import { usePathname, useRouter } from "next/navigation"
-
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
-import { getSession, UserPermissions } from "@/lib/auth"
-
-const PATH_PERMISSION_MAP: Record<string, keyof UserPermissions> = {
-  "/": "can_dashboard",
-  "/inventario": "can_inventory",
-  "/bodega": "can_warehouse",
-  "/clientes": "can_clients",
-  "/alquileres": "can_rentals",
-  "/permisos": "can_permissions",
-}
+import { getSession } from "@/lib/auth"
 
 export default function DashboardLayout({
   children,
@@ -21,24 +11,28 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const router = useRouter()
-  const pathname = usePathname()
-
-  const requiredPermission = useMemo(() => {
-    return PATH_PERMISSION_MAP[pathname] ?? null
-  }, [pathname])
+  const [loading, setLoading] = useState(true)
+  const [hasSession, setHasSession] = useState(false)
 
   useEffect(() => {
-    const session = getSession()
-    if (!session) {
-      router.replace("/login")
-      return
+    const syncSession = () => {
+      const session = getSession()
+      if (!session) {
+        setHasSession(false)
+        router.replace("/login")
+      } else {
+        setHasSession(true)
+      }
+      setLoading(false)
     }
-    if (requiredPermission && !session.user.permissions[requiredPermission]) {
-      const allowedRoute =
-        Object.entries(PATH_PERMISSION_MAP).find(([, perm]) => session.user.permissions[perm])?.[0] || "/login"
-      router.replace(allowedRoute)
-    }
-  }, [requiredPermission, router])
+
+    syncSession()
+    window.addEventListener("beru-session-changed", syncSession)
+    return () => window.removeEventListener("beru-session-changed", syncSession)
+  }, [router])
+
+  if (loading) return null
+  if (!hasSession) return null
 
   return (
     <div className="min-h-screen bg-background">

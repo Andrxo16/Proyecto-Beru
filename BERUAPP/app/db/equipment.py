@@ -58,7 +58,9 @@ class Renta(Base):
     total = Column(Numeric(12, 2))
     facturado = Column(Boolean, default=False)
     fecha_facturacion = Column(TIMESTAMP)
-    
+    salida_bodega_registrada = Column(Boolean, default=False, nullable=False)
+    fecha_salida_bodega = Column(TIMESTAMP, nullable=True)
+
     # Relationships
     inventario = relationship("Inventario", back_populates="rentas")
     cliente = relationship("Cliente", back_populates="rentas")

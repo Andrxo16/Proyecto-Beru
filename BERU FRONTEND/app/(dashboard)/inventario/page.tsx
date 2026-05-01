@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Package } from "lucide-react"
 import * as api from "@/lib/api"
+import { getSession } from "@/lib/auth"
 import {
   Dialog,
   DialogTrigger,
@@ -80,7 +81,21 @@ export default function InventarioPage() {
     nombre_item: "",
     cantidad: 1,
     descripcion: "",
-  });
+  })
+
+  const [showInventoryId, setShowInventoryId] = useState(true)
+  const [showInventoryTarifa, setShowInventoryTarifa] = useState(true)
+
+  useEffect(() => {
+    const syncInventoryFieldVisibility = () => {
+      const p = getSession()?.user.permissions
+      setShowInventoryId(p?.can_inventory_show_id !== false)
+      setShowInventoryTarifa(p?.can_inventory_show_tarifa !== false)
+    }
+    syncInventoryFieldVisibility()
+    window.addEventListener("beru-session-changed", syncInventoryFieldVisibility)
+    return () => window.removeEventListener("beru-session-changed", syncInventoryFieldVisibility)
+  }, [])
 
   useEffect(() => {
     api
@@ -98,7 +113,7 @@ export default function InventarioPage() {
   const filteredEquipos = data.filter((equipo) => {
     const matchesSearch =
       equipo.nombre_equipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(equipo.id).includes(searchTerm);
+      (showInventoryId && String(equipo.id).includes(searchTerm))
 
     const matchesCategoria =
       filterCategoria === "todos" || equipo.categoria === filterCategoria
@@ -363,21 +378,25 @@ export default function InventarioPage() {
                   </Badge>
                 </div>
                 <h3 className="font-semibold text-card-foreground mb-1">{equipo.nombre_equipo}</h3>
-                <p className="text-sm text-muted-foreground mb-3">ID: {equipo.id}</p>
+                {showInventoryId ? (
+                  <p className="text-sm text-muted-foreground mb-3">ID: {equipo.id}</p>
+                ) : null}
                 <div className="space-y-1 text-xs mb-3">
                   <p><span className="font-medium text-muted-foreground">Marca:</span> {equipo.marca}</p>
                   <p><span className="font-medium text-muted-foreground">Modelo:</span> {equipo.modelo}</p>
                   <p><span className="font-medium text-muted-foreground">Categoría:</span> {equipo.categoria}</p>
                   <p><span className="font-medium text-muted-foreground">Año:</span> {equipo.anio}</p>
                 </div>
-                <div className="pt-3 border-t border-border">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Tarifa/día</span>
-                    <span className="text-lg font-bold text-primary">
-                      ${Number(equipo.tarifa_diaria ?? 0).toLocaleString()}
-                    </span>
+                {showInventoryTarifa ? (
+                  <div className="pt-3 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Tarifa/día</span>
+                      <span className="text-lg font-bold text-primary">
+                        ${Number(equipo.tarifa_diaria ?? 0).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </CardContent>
             </Card>
           ))}
@@ -409,7 +428,9 @@ export default function InventarioPage() {
             <DialogTitle>Subinventario del equipo</DialogTitle>
             <DialogDescription>
               {selectedEquipment
-                ? `${selectedEquipment.nombre_equipo} (ID: ${selectedEquipment.id})`
+                ? showInventoryId
+                  ? `${selectedEquipment.nombre_equipo} (ID: ${selectedEquipment.id})`
+                  : selectedEquipment.nombre_equipo
                 : "Selecciona un equipo"}
             </DialogDescription>
           </DialogHeader>

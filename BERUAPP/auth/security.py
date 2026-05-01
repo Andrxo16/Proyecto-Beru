@@ -51,6 +51,12 @@ def _permissions_dict(user: Usuario) -> dict[str, bool]:
         "can_clients": bool(user.can_clients),
         "can_rentals": bool(user.can_rentals),
         "can_permissions": bool(user.can_permissions),
+        "can_inventory_show_id": bool(
+            getattr(user, "can_inventory_show_id", True)
+        ),
+        "can_inventory_show_tarifa": bool(
+            getattr(user, "can_inventory_show_tarifa", True)
+        ),
     }
 
 
@@ -92,6 +98,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def require_permission(permission_name: str):
     def _guard(current_user: Usuario = Depends(get_current_user)) -> Usuario:
         if not getattr(current_user, permission_name, False):
+            raise HTTPException(status_code=403, detail="No tienes permiso para esta seccion")
+        return current_user
+
+    return _guard
+
+
+def require_any_permission(*permission_names: str):
+    """Usuario debe tener al menos uno de los permisos listados."""
+
+    def _guard(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+        if not any(getattr(current_user, name, False) for name in permission_names):
             raise HTTPException(status_code=403, detail="No tienes permiso para esta seccion")
         return current_user
 

@@ -32,19 +32,65 @@ function forwardHeaders(from: Headers): Headers {
   return out;
 }
 
+function connectionErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { code?: string; cause?: unknown };
+  if (typeof e.code === "string") return e.code;
+  return connectionErrorCode(e.cause);
+}
+
+function errorChainText(err: unknown): string {
+  if (!err) return "";
+  if (err instanceof Error) {
+    const c = err.cause !== undefined ? ` ${errorChainText(err.cause)}` : "";
+    return `${err.message}${c}`;
+  }
+  if (typeof err === "object" && err !== null && "message" in err) {
+    return String((err as { message: unknown }).message);
+  }
+  return String(err);
+}
+
+function upstreamErrorMessage(err: unknown, base: string): string {
+  const code = connectionErrorCode(err);
+  if (code === "ECONNREFUSED" || code === "ENOTFOUND") {
+    return `No hay API en ${base}. Inicia el backend (por ejemplo en BERUAPP: python run.py) y vuelve a intentar.`;
+  }
+  const chain = errorChainText(err);
+  if (
+    chain.includes("ECONNREFUSED") ||
+    chain.includes("ENOTFOUND") ||
+    /fetch failed/i.test(chain)
+  ) {
+    return `No hay API en ${base}. Inicia el backend (por ejemplo en BERUAPP: python run.py) y vuelve a intentar.`;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return `No se pudo contactar la API (${base}): ${msg}`;
+}
+
 async function proxy(
   req: NextRequest,
   ctx: { params: Promise<{ path?: string[] }> }
 ) {
   const { path: segments = [] } = await ctx.params;
   const url = buildTarget(req, segments);
+  const base = upstreamBase();
   const hasBody = !["GET", "HEAD"].includes(req.method);
-  const backend = await fetch(url, {
-    method: req.method,
-    headers: forwardHeaders(req.headers),
-    body: hasBody ? await req.arrayBuffer() : undefined,
-    cache: "no-store",
-  });
+
+  let backend: Response;
+  try {
+    backend = await fetch(url, {
+      method: req.method,
+      headers: forwardHeaders(req.headers),
+      body: hasBody ? await req.arrayBuffer() : undefined,
+      cache: "no-store",
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { detail: upstreamErrorMessage(err, base) },
+      { status: 503 }
+    );
+  }
 
   const res = new NextResponse(backend.body, {
     status: backend.status,

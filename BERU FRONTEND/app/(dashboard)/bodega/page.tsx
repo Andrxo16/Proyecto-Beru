@@ -14,8 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
-import { PackageCheck, Search, Truck, Undo2 } from "lucide-react"
+import { AlertTriangle, PackageCheck, Search, Truck } from "lucide-react"
 import * as api from "@/lib/api"
+import { effectiveEstadoBodegaForUi } from "@/lib/rental-estado"
 
 type Rental = {
   id: number
@@ -29,7 +30,8 @@ type Rental = {
 }
 
 const estadoStyles = {
-  "pendiente-salida": "bg-slate-100 text-slate-800",
+  "pendiente-salida":
+    "border border-red-200 bg-red-50 text-red-800 font-medium shadow-sm",
   activo: "bg-green-100 text-green-800",
   "por-vencer": "bg-yellow-100 text-yellow-800",
   vencido: "bg-red-100 text-red-800",
@@ -38,8 +40,10 @@ const estadoStyles = {
   "liquidacion-parcial": "bg-orange-100 text-orange-800",
 }
 
+const RENTALS_CHANGED = "beru-rentals-changed"
+
 const estadoLabels = {
-  "pendiente-salida": "Pendiente de salida",
+  "pendiente-salida": "Por salida",
   activo: "En alquiler",
   "por-vencer": "Por vencer",
   vencido: "Vencido",
@@ -57,6 +61,10 @@ function formatDate(dateString: string) {
   })
 }
 
+function mapRentalForBodega(r: Rental): Rental {
+  return { ...r, estado: effectiveEstadoBodegaForUi(r) as Rental["estado"] }
+}
+
 export default function BodegaPage() {
   const [rentals, setRentals] = useState<Rental[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -65,7 +73,11 @@ export default function BodegaPage() {
   const loadRentals = async () => {
     try {
       const data = await api.getRentals()
-      setRentals(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setRentals(list.map((row) => mapRentalForBodega(row as Rental)))
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(RENTALS_CHANGED))
+      }
     } catch (error) {
       console.error("Error al cargar bodega:", error)
     }
@@ -76,7 +88,7 @@ export default function BodegaPage() {
   }, [])
 
   const visible = rentals
-    .filter((r) => r.estado !== "facturado")
+    .filter((r) => effectiveEstadoBodegaForUi(r) !== "facturado")
     .filter((r) => {
       const displayId = `ERM-${String(r.id).padStart(3, "0")}`
       return (
@@ -86,9 +98,11 @@ export default function BodegaPage() {
       )
     })
 
-  const pendingDispatch = rentals.filter((r) => r.estado === "pendiente-salida").length
-  const onRoute = rentals.filter((r) => r.estado === "activo" || r.estado === "por-vencer" || r.estado === "vencido").length
-  const returned = rentals.filter((r) => r.estado === "devuelto").length
+  const pendingDispatch = rentals.filter((r) => effectiveEstadoBodegaForUi(r) === "pendiente-salida").length
+  const onRoute = rentals.filter((r) => {
+    const e = effectiveEstadoBodegaForUi(r)
+    return e === "activo" || e === "por-vencer" || e === "vencido"
+  }).length
 
   const handleDispatch = async (rentalId: number) => {
     try {
@@ -120,19 +134,23 @@ export default function BodegaPage() {
     <div className="flex flex-col">
       <Header
         title="Bodega"
-        subtitle="Control de salida y devolucion de equipos de alquiler"
+        subtitle="Salida de bodega inicia el cobro por dias; entrada (devolucion) lo detiene y libera el equipo"
       />
 
       <div className="p-6">
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
-          <Card className="border-border bg-card">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <Card className="border border-red-200 bg-red-50/90 shadow-sm">
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100">
-                <PackageCheck className="h-6 w-6 text-slate-700" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-100">
+                {pendingDispatch > 0 ? (
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                ) : (
+                  <PackageCheck className="h-6 w-6 text-red-400" />
+                )}
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Pendientes por salida</p>
-                <p className="text-2xl font-bold text-card-foreground">{pendingDispatch}</p>
+                <p className="text-sm font-medium text-red-800">Pendientes por salida</p>
+                <p className="text-2xl font-bold text-red-900">{pendingDispatch}</p>
               </div>
             </CardContent>
           </Card>
@@ -144,17 +162,6 @@ export default function BodegaPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Equipos en alquiler</p>
                 <p className="text-2xl font-bold text-card-foreground">{onRoute}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border bg-card">
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100">
-                <Undo2 className="h-6 w-6 text-purple-700" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Devueltos</p>
-                <p className="text-2xl font-bold text-card-foreground">{returned}</p>
               </div>
             </CardContent>
           </Card>
@@ -188,12 +195,13 @@ export default function BodegaPage() {
               </TableHeader>
               <TableBody>
                 {visible.map((rental) => {
-                  const canDispatch = rental.estado === "pendiente-salida"
+                  const estadoUi = effectiveEstadoBodegaForUi(rental)
+                  const canDispatch = estadoUi === "pendiente-salida"
                   const canReturn =
-                    rental.estado === "activo" ||
-                    rental.estado === "por-vencer" ||
-                    rental.estado === "vencido" ||
-                    rental.estado === "liquidacion-parcial"
+                    estadoUi === "activo" ||
+                    estadoUi === "por-vencer" ||
+                    estadoUi === "vencido" ||
+                    estadoUi === "liquidacion-parcial"
 
                   return (
                     <TableRow key={rental.id} className="hover:bg-muted/50">
@@ -209,9 +217,9 @@ export default function BodegaPage() {
                       <TableCell>
                         <Badge
                           variant="secondary"
-                          className={estadoStyles[rental.estado as keyof typeof estadoStyles]}
+                          className={estadoStyles[estadoUi as keyof typeof estadoStyles]}
                         >
-                          {estadoLabels[rental.estado as keyof typeof estadoLabels]}
+                          {estadoLabels[estadoUi as keyof typeof estadoLabels]}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -231,7 +239,7 @@ export default function BodegaPage() {
                             disabled={loadingId === rental.id}
                             onClick={() => handleReturn(rental.id)}
                           >
-                            {loadingId === rental.id ? "Procesando..." : "Registrar devolucion"}
+                            {loadingId === rental.id ? "Procesando..." : "Entrada a bodega"}
                           </Button>
                         ) : (
                           <span className="text-sm text-muted-foreground">Sin accion</span>

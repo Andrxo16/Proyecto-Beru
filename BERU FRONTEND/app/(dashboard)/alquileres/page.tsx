@@ -26,6 +26,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus, Search, FileText, Calendar, CheckCircle2 } from "lucide-react"
 import * as api from "@/lib/api"
+import { effectiveEstadoBodegaForUi } from "@/lib/rental-estado"
 
 type Rental = {
   id: number
@@ -60,7 +61,7 @@ const estadoStyles = {
   "por-vencer": "bg-yellow-100 text-yellow-800",
   vencido: "bg-red-100 text-red-800",
   facturado: "bg-blue-100 text-blue-800",
-  "pendiente-salida": "bg-slate-100 text-slate-800",
+  "pendiente-salida": "border border-red-200 bg-red-50 text-red-900",
   devuelto: "bg-purple-100 text-purple-800",
   "liquidacion-parcial": "bg-orange-100 text-orange-800",
 }
@@ -70,7 +71,7 @@ const estadoLabels = {
   "por-vencer": "Por Vencer",
   vencido: "Vencido",
   facturado: "Facturado",
-  "pendiente-salida": "Pendiente de salida",
+  "pendiente-salida": "Por salida",
   devuelto: "Devuelto",
   "liquidacion-parcial": "Liquidacion parcial",
 }
@@ -90,6 +91,10 @@ function formatCurrency(amount: number) {
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(amount)
+}
+
+function estadoAlquilerUi(a: Rental): Rental["estado"] {
+  return effectiveEstadoBodegaForUi(a) as Rental["estado"]
 }
 
 export default function AlquileresPage() {
@@ -130,20 +135,26 @@ export default function AlquileresPage() {
     loadData()
   }, [])
 
+  const equiposDisponibles = equipment.filter((item) => {
+    const s = (item.estado ?? "").toString().trim().toLowerCase()
+    return !s || s === "disponible"
+  })
+
   const filteredAlquileres = rentals.filter((alquiler) => {
     const displayId = `ERM-${String(alquiler.id).padStart(3, "0")}`
     const matchesSearch = 
       (alquiler.cliente || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (alquiler.equipo_nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       displayId.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesEstado = filterEstado === "todos" || alquiler.estado === filterEstado
+    const matchesEstado =
+      filterEstado === "todos" || estadoAlquilerUi(alquiler) === filterEstado
     return matchesSearch && matchesEstado
   })
 
   // Summary stats
   const stats = {
-    activos: rentals.filter(a => a.estado === "activo").length,
-    porVencer: rentals.filter(a => a.estado === "por-vencer").length,
+    activos: rentals.filter((a) => estadoAlquilerUi(a) === "activo").length,
+    porVencer: rentals.filter((a) => estadoAlquilerUi(a) === "por-vencer").length,
     totalMes: rentals.reduce((sum, a) => sum + Number(a.total ?? 0), 0),
   }
 
@@ -153,10 +164,23 @@ export default function AlquileresPage() {
       return
     }
 
+    const inventarioId = Number(formData.inventario_id)
+    if (!Number.isFinite(inventarioId) || inventarioId <= 0) {
+      alert("Selecciona un equipo valido de la lista")
+      return
+    }
+
+    const equipoSel = equipment.find((e) => e.id === inventarioId)
+    const est = (equipoSel?.estado ?? "").toString().trim().toLowerCase()
+    if (equipoSel && est && est !== "disponible") {
+      alert("Este equipo no esta disponible para un nuevo alquiler.")
+      return
+    }
+
     try {
       setLoading(true)
       await api.createRental({
-        inventario_id: Number(formData.inventario_id),
+        inventario_id: inventarioId,
         cliente_id: Number(formData.cliente_id),
         fecha_inicio: formData.fecha_inicio,
         fecha_fin: formData.fecha_fin,
@@ -165,6 +189,9 @@ export default function AlquileresPage() {
       })
 
       await loadData()
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("beru-rentals-changed"))
+      }
       setFormData({
         cliente_id: "",
         inventario_id: "",
@@ -177,7 +204,9 @@ export default function AlquileresPage() {
       setDialogOpen(false)
     } catch (error) {
       console.error("Error al crear alquiler:", error)
-      alert("No se pudo crear el alquiler. Verifica que la fecha fin sea mayor que la fecha inicio.")
+      const msg =
+        error instanceof Error ? error.message : "No se pudo crear el alquiler."
+      alert(msg)
     } finally {
       setLoading(false)
     }
@@ -266,7 +295,7 @@ export default function AlquileresPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los Estados</SelectItem>
-                <SelectItem value="pendiente-salida">Pendiente de salida</SelectItem>
+                <SelectItem value="pendiente-salida">Por salida</SelectItem>
                 <SelectItem value="activo">Activo</SelectItem>
                 <SelectItem value="por-vencer">Por Vencer</SelectItem>
                 <SelectItem value="vencido">Vencido</SelectItem>
@@ -286,7 +315,7 @@ export default function AlquileresPage() {
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Alquiler</DialogTitle>
                 <DialogDescription>
-                  Complete los datos del contrato de alquiler.
+                  Solo se listan equipos en estado Disponible. Si no aparece uno, revisa inventario o bodega.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -326,11 +355,19 @@ export default function AlquileresPage() {
                       <SelectValue placeholder="Seleccionar equipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {equipment.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.nombre_equipo} - ${Number(item.tarifa_diaria ?? 0).toLocaleString()}/dia
+                      {equiposDisponibles.length === 0 ? (
+                        <SelectItem value="_sin_equipo_" disabled>
+                          {equipment.length === 0
+                            ? "No hay equipos en inventario"
+                            : "Ningun equipo disponible (estados distintos de Disponible)"}
                         </SelectItem>
-                      ))}
+                      ) : (
+                        equiposDisponibles.map((item) => (
+                          <SelectItem key={item.id} value={String(item.id)}>
+                            {item.nombre_equipo} - ${Number(item.tarifa_diaria ?? 0).toLocaleString()}/dia
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -437,36 +474,36 @@ export default function AlquileresPage() {
                     <TableCell className="font-semibold text-card-foreground">{formatCurrency(alquiler.total)}</TableCell>
                     <TableCell>
                       <Badge 
-                        variant="secondary" 
-                        className={estadoStyles[alquiler.estado as keyof typeof estadoStyles]}
+                        variant="secondary"
+                        className={estadoStyles[estadoAlquilerUi(alquiler) as keyof typeof estadoStyles]}
                       >
-                        {estadoLabels[alquiler.estado as keyof typeof estadoLabels]}
+                        {estadoLabels[estadoAlquilerUi(alquiler) as keyof typeof estadoLabels]}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
-                          variant={alquiler.estado === "facturado" ? "outline" : "default"}
-                          className={alquiler.estado === "facturado" ? "" : "bg-green-600 text-white hover:bg-green-700"}
-                          disabled={alquiler.estado === "facturado"}
+                          variant={estadoAlquilerUi(alquiler) === "facturado" ? "outline" : "default"}
+                          className={estadoAlquilerUi(alquiler) === "facturado" ? "" : "bg-green-600 text-white hover:bg-green-700"}
+                          disabled={estadoAlquilerUi(alquiler) === "facturado"}
                           onClick={() => handleCloseInvoice(alquiler.id)}
                         >
                           <CheckCircle2 className="mr-1 h-4 w-4" />
-                          {alquiler.estado === "facturado" ? "Facturado" : "Liquidar remision"}
+                          {estadoAlquilerUi(alquiler) === "facturado" ? "Facturado" : "Liquidar remision"}
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={
-                            alquiler.estado === "facturado" ||
-                            alquiler.estado === "pendiente-salida" ||
-                            alquiler.estado === "devuelto" ||
-                            alquiler.estado === "liquidacion-parcial"
+                            estadoAlquilerUi(alquiler) === "facturado" ||
+                            estadoAlquilerUi(alquiler) === "pendiente-salida" ||
+                            estadoAlquilerUi(alquiler) === "devuelto" ||
+                            estadoAlquilerUi(alquiler) === "liquidacion-parcial"
                           }
                           onClick={() => handlePartialLiquidation(alquiler.id)}
                         >
-                          {alquiler.estado === "liquidacion-parcial" ? "Conteo detenido" : "Liquidacion parcial"}
+                          {estadoAlquilerUi(alquiler) === "liquidacion-parcial" ? "Conteo detenido" : "Liquidacion parcial"}
                         </Button>
                       </div>
                     </TableCell>

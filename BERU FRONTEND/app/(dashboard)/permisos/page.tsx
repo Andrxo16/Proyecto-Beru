@@ -27,9 +27,16 @@ const EMPTY_PERMISSIONS: UserPermissions = {
   can_clients: false,
   can_rentals: false,
   can_permissions: false,
+  can_inventory_show_id: true,
+  can_inventory_show_tarifa: true,
 }
 
-const PERMISSION_LABELS: Array<{ key: keyof UserPermissions; label: string }> = [
+type ModulePermissionKey = Exclude<
+  keyof UserPermissions,
+  "can_inventory_show_id" | "can_inventory_show_tarifa"
+>
+
+const PERMISSION_LABELS: Array<{ key: ModulePermissionKey; label: string }> = [
   { key: "can_dashboard", label: "Dashboard" },
   { key: "can_inventory", label: "Inventario" },
   { key: "can_warehouse", label: "Bodega" },
@@ -37,6 +44,27 @@ const PERMISSION_LABELS: Array<{ key: keyof UserPermissions; label: string }> = 
   { key: "can_rentals", label: "Alquileres" },
   { key: "can_permissions", label: "Permisos" },
 ]
+
+const INVENTORY_FIELD_LABELS: Array<{
+  key: "can_inventory_show_id" | "can_inventory_show_tarifa"
+  label: string
+}> = [
+  { key: "can_inventory_show_id", label: "Inventario: ver ID en tarjetas" },
+  { key: "can_inventory_show_tarifa", label: "Inventario: ver tarifa/día" },
+]
+
+function normalizeUserPermissions(raw: Partial<UserPermissions>): UserPermissions {
+  return {
+    can_dashboard: !!raw.can_dashboard,
+    can_inventory: !!raw.can_inventory,
+    can_warehouse: !!raw.can_warehouse,
+    can_clients: !!raw.can_clients,
+    can_rentals: !!raw.can_rentals,
+    can_permissions: !!raw.can_permissions,
+    can_inventory_show_id: raw.can_inventory_show_id !== false,
+    can_inventory_show_tarifa: raw.can_inventory_show_tarifa !== false,
+  }
+}
 
 export default function PermisosPage() {
   const [users, setUsers] = useState<UserRecord[]>([])
@@ -51,7 +79,13 @@ export default function PermisosPage() {
   const loadUsers = async () => {
     try {
       const data = await api.getUsers()
-      setUsers(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      setUsers(
+        list.map((u: UserRecord) => ({
+          ...u,
+          permissions: normalizeUserPermissions(u.permissions ?? {}),
+        }))
+      )
     } catch (error) {
       console.error("Error al cargar usuarios:", error)
       alert(error instanceof Error ? error.message : "No se pudieron consultar usuarios")
@@ -62,9 +96,9 @@ export default function PermisosPage() {
     loadUsers()
   }, [])
 
-  const togglePermission = (
+  const togglePermission = <K extends keyof UserPermissions>(
     permissions: UserPermissions,
-    key: keyof UserPermissions
+    key: K
   ): UserPermissions => ({
     ...permissions,
     [key]: !permissions[key],
@@ -110,7 +144,7 @@ export default function PermisosPage() {
 
   return (
     <div className="flex flex-col">
-      <Header title="Permisos" subtitle="Gestion de usuarios y acceso por modulo" />
+      <Header title="Permisos" subtitle="Usuarios, modulos y campos visibles en inventario" />
 
       <div className="space-y-6 p-6">
         <Card>
@@ -156,6 +190,27 @@ export default function PermisosPage() {
                 />
                 Activo
               </Label>
+            </div>
+            <div className="rounded-md border border-dashed p-3">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                Campos en listado de inventario (solo afecta tarjetas; requiere volver a entrar si cambias tu propio usuario)
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {INVENTORY_FIELD_LABELS.map((perm) => (
+                  <Label key={perm.key} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={form.permissions[perm.key]}
+                      onCheckedChange={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          permissions: togglePermission(prev.permissions, perm.key),
+                        }))
+                      }
+                    />
+                    {perm.label}
+                  </Label>
+                ))}
+              </div>
             </div>
             <Button onClick={handleCreateUser}>Crear usuario</Button>
           </CardContent>
@@ -216,6 +271,26 @@ export default function PermisosPage() {
                           />
                           Activo
                         </Label>
+                        {INVENTORY_FIELD_LABELS.map((perm) => (
+                          <Label key={`${user.id}-inv-${perm.key}`} className="flex items-center gap-2 text-xs">
+                            <Checkbox
+                              checked={user.permissions[perm.key]}
+                              onCheckedChange={() =>
+                                setUsers((prev) =>
+                                  prev.map((item) =>
+                                    item.id === user.id
+                                      ? {
+                                          ...item,
+                                          permissions: togglePermission(item.permissions, perm.key),
+                                        }
+                                      : item
+                                  )
+                                )
+                              }
+                            />
+                            {perm.label}
+                          </Label>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell>

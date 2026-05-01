@@ -28,6 +28,10 @@ def _as_user_response(user: Usuario) -> UserResponse:
             can_clients=bool(user.can_clients),
             can_rentals=bool(user.can_rentals),
             can_permissions=bool(user.can_permissions),
+            can_inventory_show_id=bool(getattr(user, "can_inventory_show_id", True)),
+            can_inventory_show_tarifa=bool(
+                getattr(user, "can_inventory_show_tarifa", True)
+            ),
         ),
         created_at=user.created_at,
     )

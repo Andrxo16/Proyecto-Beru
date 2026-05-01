@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Bell, Search, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { clearSession, getSession } from "@/lib/auth"
+import * as api from "@/lib/api"
+import { effectiveEstadoBodegaForUi } from "@/lib/rental-estado"
+
+const RENTALS_CHANGED = "beru-rentals-changed"
 
 interface HeaderProps {
   title: string
@@ -21,7 +26,45 @@ interface HeaderProps {
 
 export function Header({ title, subtitle }: HeaderProps) {
   const router = useRouter()
-  const session = getSession()
+  const [username, setUsername] = useState("Usuario")
+  const [pendingBodega, setPendingBodega] = useState(0)
+
+  useEffect(() => {
+    setUsername(getSession()?.user?.username ?? "Usuario")
+    const onSession = () => setUsername(getSession()?.user?.username ?? "Usuario")
+    window.addEventListener("beru-session-changed", onSession)
+    return () => window.removeEventListener("beru-session-changed", onSession)
+  }, [])
+
+  useEffect(() => {
+    const session = getSession()
+    if (!session?.user?.permissions?.can_warehouse) {
+      setPendingBodega(0)
+      return
+    }
+
+    const load = async () => {
+      try {
+        const data = await api.getRentals()
+        const list = Array.isArray(data) ? data : []
+        const n = list.filter(
+          (r: { estado?: string; dias?: number; total?: number }) =>
+            effectiveEstadoBodegaForUi({
+              estado: String(r.estado ?? ""),
+              dias: r.dias,
+              total: r.total,
+            }) === "pendiente-salida"
+        ).length
+        setPendingBodega(n)
+      } catch {
+        setPendingBodega(0)
+      }
+    }
+
+    void load()
+    window.addEventListener(RENTALS_CHANGED, load)
+    return () => window.removeEventListener(RENTALS_CHANGED, load)
+  }, [])
 
   const handleLogout = () => {
     clearSession()
@@ -47,10 +90,12 @@ export function Header({ title, subtitle }: HeaderProps) {
           />
         </div>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        {/* Notificacion bodega: punto rojo solo si hay alquileres pendientes por salir */}
+        <Button variant="ghost" size="icon" className="relative" type="button" aria-label="Notificaciones">
           <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
+          {pendingBodega > 0 ? (
+            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-background" />
+          ) : null}
         </Button>
 
         {/* User Menu */}
@@ -60,9 +105,7 @@ export function Header({ title, subtitle }: HeaderProps) {
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
                 <User className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="hidden text-sm font-medium md:block">
-                {session?.user.username || "Usuario"}
-              </span>
+              <span className="hidden text-sm font-medium md:block">{username}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

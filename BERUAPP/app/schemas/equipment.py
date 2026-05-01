@@ -115,6 +115,8 @@ class UserPermissions(BaseModel):
     can_clients: bool = False
     can_rentals: bool = False
     can_permissions: bool = False
+    can_inventory_show_id: bool = True
+    can_inventory_show_tarifa: bool = True
 
 
 class UserCreate(BaseModel):

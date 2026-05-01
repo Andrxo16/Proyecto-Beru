@@ -7,6 +7,10 @@ export type UserPermissions = {
   can_clients: boolean
   can_rentals: boolean
   can_permissions: boolean
+  /** Ver ID del equipo en tarjetas y modales de inventario */
+  can_inventory_show_id: boolean
+  /** Ver tarifa diaria en tarjetas de inventario */
+  can_inventory_show_tarifa: boolean
 }
 
 export type SessionUser = {
