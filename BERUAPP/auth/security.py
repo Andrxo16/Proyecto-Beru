@@ -15,7 +15,11 @@ from app.db.equipment import Usuario
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "SUPER_SECRETO_CAMBIAR_EN_PRODUCCION")
+SECRET_KEY = (os.getenv("SECRET_KEY") or "").strip()
+if not SECRET_KEY:
+    raise RuntimeError(
+        "Falta SECRET_KEY en BERUAPP/.env (o en el entorno). Copia .env.example a .env y define una clave larga y secreta."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_MINUTES = 60 * 8
 

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const upstreamBase = () =>
-  (process.env.BERU_API_PROXY_TARGET || "http://127.0.0.1:8000").replace(
-    /\/$/,
-    ""
-  );
-
 export const runtime = "nodejs";
 
-function buildTarget(req: NextRequest, segments: string[]): string {
+function resolveUpstreamBase(): string | null {
+  const raw = process.env.BERU_API_PROXY_TARGET?.trim();
+  if (!raw) return null;
+  return raw.replace(/\/$/, "");
+}
+
+function buildTarget(req: NextRequest, segments: string[], base: string): string {
   const rel = segments.length ? `${segments.join("/")}/` : "";
-  const u = new URL(rel, `${upstreamBase()}/`);
+  const u = new URL(rel, `${base}/`);
   u.search = req.nextUrl.search;
   return u.href;
 }
@@ -72,9 +72,19 @@ async function proxy(
   req: NextRequest,
   ctx: { params: Promise<{ path?: string[] }> }
 ) {
+  const base = resolveUpstreamBase();
+  if (!base) {
+    return NextResponse.json(
+      {
+        detail:
+          "Falta BERU_API_PROXY_TARGET en .env.local (misma URL base que el FastAPI, ej. http://127.0.0.1:8000). Copia .env.local.example.",
+      },
+      { status: 503 }
+    );
+  }
+
   const { path: segments = [] } = await ctx.params;
-  const url = buildTarget(req, segments);
-  const base = upstreamBase();
+  const url = buildTarget(req, segments, base);
   const hasBody = !["GET", "HEAD"].includes(req.method);
 
   let backend: Response;

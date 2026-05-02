@@ -208,24 +208,19 @@ def get_rentals(
             status = "facturado"
             recalculated_days = rental.dias or 0
             recalculated_total = rental.total or Decimal(0)
-            equipment.estado = "disponible"
         elif rental.fecha_facturacion:
-            # Liquidacion parcial: se congela el conteo aunque no exista devolucion fisica.
+            # Liquidacion parcial: conteo congelado al dia del corte (no usar "hoy" hasta liquidar o devolver).
             cutoff = datetime.combine(rental.fecha_facturacion.date(), time.min)
             recalculated_days = _compute_days(rental.fecha_inicio, cutoff)
             recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
             status = "liquidacion-parcial"
         elif not salida_ok:
-            # Sin despacho de bodega: siempre "pendiente por salida" (no inferir devuelto por inventario disponible).
+            # Sin despacho: solo proyeccion; no mutar salida_bodega ni inventario en un GET.
             status = "pendiente-salida"
             recalculated_days = 0
             recalculated_total = Decimal(0)
-            rental.salida_bodega_registrada = False
-            rental.fecha_salida_bodega = None
-            equipment.estado = "reservado"
         elif estado_eq == "disponible":
-            # Devolucion real: hubo despacho (cobro) y cierre con dias/total > 0.
-            # Si inventario esta disponible pero dias y total siguen en 0, es dato sucio (no marcar devuelto).
+            # Devolucion: hubo cobro previo; si dias/total en 0 es inconsistencia, no borrar flags de salida aqui.
             dias_row = int(rental.dias or 0)
             total_row = Decimal(rental.total or 0)
             if dias_row > 0 or total_row > 0:
@@ -236,28 +231,18 @@ def get_rentals(
                 status = "pendiente-salida"
                 recalculated_days = 0
                 recalculated_total = Decimal(0)
-                rental.salida_bodega_registrada = False
-                rental.fecha_salida_bodega = None
-                equipment.estado = "reservado"
         elif estado_eq in ("prestamo", "mantenimiento"):
+            # En ruta: dias hasta hoy mientras no haya liquidacion parcial ni factura cerrada ni devolucion.
             effective_end = _compute_effective_end()
             recalculated_days = _compute_days(rental.fecha_inicio, effective_end)
             recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
             status = _compute_rental_status(rental.fecha_fin) if rental.fecha_fin else "activo"
-            if status == "vencido":
-                equipment.estado = "mantenimiento"
-            elif status in ("activo", "por-vencer"):
-                equipment.estado = "prestamo"
         else:
-            # Despacho ya registrado pero inventario aun "reservado" u otro valor: alinear a prestamo/mantenimiento.
+            # Despacho registrado e inventario en otro estado: mismo cobro por dias transcurridos.
             effective_end = _compute_effective_end()
             recalculated_days = _compute_days(rental.fecha_inicio, effective_end)
             recalculated_total = Decimal(rental.tarifa_diaria) * Decimal(recalculated_days)
             status = _compute_rental_status(rental.fecha_fin) if rental.fecha_fin else "activo"
-            if status == "vencido":
-                equipment.estado = "mantenimiento"
-            elif status in ("activo", "por-vencer"):
-                equipment.estado = "prestamo"
 
         if rental.dias != recalculated_days:
             rental.dias = recalculated_days
@@ -525,6 +510,7 @@ def close_rental_invoice(
         # Si ya hay devolucion en bodega o liquidacion parcial, se conserva el total congelado.
         rental.dias = rental.dias or 0
         rental.total = rental.total or Decimal(0)
+        rental.facturado = True
     else:
         effective_end = _compute_billing_end_for_closure(rental.fecha_inicio)
         rental.dias = _compute_days(rental.fecha_inicio, effective_end)

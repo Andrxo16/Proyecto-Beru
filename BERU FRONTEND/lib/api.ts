@@ -1,53 +1,25 @@
 import { clearSession, getAuthToken, SessionPayload, UserPermissions } from "@/lib/auth";
+
 /**
- * Base del API.
- * - `next dev` en el navegador: URL directa al FastAPI (mismo host que la página, puerto 8000 o 127.0.0.1). CORS en el backend; evita que el proxy de Next falle al hacer fetch a localhost.
- * - `next start` / producción en el navegador sin `NEXT_PUBLIC_API_URL`: `/api/proxy` → FastAPI según `BERU_API_PROXY_TARGET`.
- * - Con `NEXT_PUBLIC_API_URL`: llamada directa; `localhost` se normaliza a 127.0.0.1.
+ * Origen del FastAPI: solo `NEXT_PUBLIC_API_URL` en `.env.local` (ver `.env.local.example`).
  */
-function isDevBrowser(): boolean {
-  return (
-    typeof globalThis !== "undefined" &&
-    "window" in globalThis &&
-    process.env.NODE_ENV === "development"
-  );
-}
-
-/** Origen del API en desarrollo desde el cliente (misma máquina o misma IP que el front). */
-function browserDevApiOrigin(): string {
-  const host = globalThis.window?.location?.hostname;
-  if (!host || host === "localhost" || host === "127.0.0.1") {
-    return "http://127.0.0.1:8000";
-  }
-  return `http://${host}:8000`;
-}
-
 function getApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (raw) {
-    try {
-      const url = new URL(raw);
-      if (url.hostname === "localhost") url.hostname = "127.0.0.1";
-      const loopback =
-        url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-      if (typeof globalThis !== "undefined" && "window" in globalThis && loopback) {
-        if (isDevBrowser()) return browserDevApiOrigin();
-        return "/api/proxy";
-      }
-      const path = url.pathname.replace(/\/$/, "");
-      return path && path !== "/" ? `${url.origin}${path}` : url.origin;
-    } catch {
-      return raw;
-    }
+  if (!raw) {
+    throw new Error(
+      "Falta NEXT_PUBLIC_API_URL. En BERU FRONTEND copia .env.local.example a .env.local y define la URL del API (ej. http://127.0.0.1:8000)."
+    );
   }
-  if (typeof globalThis !== "undefined" && "window" in globalThis) {
-    if (isDevBrowser()) return browserDevApiOrigin();
-    return "/api/proxy";
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "localhost") url.hostname = "127.0.0.1";
+    const path = url.pathname.replace(/\/$/, "");
+    return path && path !== "/" ? `${url.origin}${path}` : url.origin;
+  } catch {
+    return raw;
   }
-  return "http://127.0.0.1:8000";
 }
 
-/** Resuelve la base en cada `fetch` (no en la carga del módulo): evita que el bundle quede con 127.0.0.1:8000 y el navegador falle con "Failed to fetch". */
 function apiRoot(): string {
   return getApiBaseUrl();
 }

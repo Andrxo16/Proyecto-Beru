@@ -136,6 +136,18 @@ export default function AlquileresPage() {
 
   useEffect(() => {
     loadData()
+    const onRentalsChanged = () => {
+      void loadData()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadData()
+    }
+    window.addEventListener("beru-rentals-changed", onRentalsChanged)
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      window.removeEventListener("beru-rentals-changed", onRentalsChanged)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
   }, [])
 
   const equiposDisponibles = equipment.filter((item) => {
@@ -219,6 +231,9 @@ export default function AlquileresPage() {
     try {
       await api.closeRentalInvoice(rentalId)
       await loadData()
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("beru-rentals-changed"))
+      }
     } catch (error) {
       console.error("Error al facturar alquiler:", error)
       alert("No se pudo marcar como facturado")
@@ -229,6 +244,9 @@ export default function AlquileresPage() {
     try {
       await api.partialLiquidation(rentalId)
       await loadData()
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("beru-rentals-changed"))
+      }
     } catch (error) {
       console.error("Error en liquidacion parcial:", error)
       alert("No se pudo aplicar la liquidacion parcial")

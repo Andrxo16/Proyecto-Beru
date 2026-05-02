@@ -75,16 +75,31 @@ export default function BodegaPage() {
       const data = await api.getRentals()
       const list = Array.isArray(data) ? data : []
       setRentals(list.map((row) => mapRentalForBodega(row as Rental)))
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event(RENTALS_CHANGED))
-      }
     } catch (error) {
       console.error("Error al cargar bodega:", error)
     }
   }
 
+  const notifyRentalsChanged = () => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(RENTALS_CHANGED))
+    }
+  }
+
   useEffect(() => {
-    loadRentals()
+    void loadRentals()
+    const onRentalsChanged = () => {
+      void loadRentals()
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadRentals()
+    }
+    window.addEventListener("beru-rentals-changed", onRentalsChanged)
+    document.addEventListener("visibilitychange", onVisible)
+    return () => {
+      window.removeEventListener("beru-rentals-changed", onRentalsChanged)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
   }, [])
 
   const visible = rentals
@@ -109,6 +124,7 @@ export default function BodegaPage() {
       setLoadingId(rentalId)
       await api.dispatchRental(rentalId)
       await loadRentals()
+      notifyRentalsChanged()
     } catch (error) {
       console.error("Error al despachar:", error)
       alert("No se pudo registrar la salida")
@@ -122,6 +138,7 @@ export default function BodegaPage() {
       setLoadingId(rentalId)
       await api.returnRental(rentalId)
       await loadRentals()
+      notifyRentalsChanged()
     } catch (error) {
       console.error("Error al devolver:", error)
       alert("No se pudo registrar la devolucion")
