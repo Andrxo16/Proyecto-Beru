@@ -156,18 +156,46 @@ export default function BodegaPage() {
 
       <div className="p-6">
         <div className="mb-6 grid gap-4 sm:grid-cols-2">
-          <Card className="border border-red-200 bg-red-50/90 shadow-sm">
+          <Card
+            className={
+              pendingDispatch > 0
+                ? "border border-red-200 bg-red-50/90 shadow-sm"
+                : "border-border bg-card"
+            }
+          >
             <CardContent className="flex items-center gap-4 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-100">
+              <div
+                className={
+                  pendingDispatch > 0
+                    ? "flex h-12 w-12 items-center justify-center rounded-lg bg-red-100"
+                    : "flex h-12 w-12 items-center justify-center rounded-lg bg-muted"
+                }
+              >
                 {pendingDispatch > 0 ? (
                   <AlertTriangle className="h-6 w-6 text-red-600" />
                 ) : (
-                  <PackageCheck className="h-6 w-6 text-red-400" />
+                  <PackageCheck className="h-6 w-6 text-muted-foreground" />
                 )}
               </div>
               <div>
-                <p className="text-sm font-medium text-red-800">Pendientes por salida</p>
-                <p className="text-2xl font-bold text-red-900">{pendingDispatch}</p>
+                <p
+                  className={
+                    pendingDispatch > 0
+                      ? "text-sm font-medium text-red-800"
+                      : "text-sm font-medium text-muted-foreground"
+                  }
+                >
+                  Pendientes por salida
+                </p>
+                <p
+                  className={
+                    pendingDispatch > 0
+                      ? "text-2xl font-bold text-red-900"
+                      : "text-2xl font-bold text-card-foreground"
+                  }
+                >
+                  {pendingDispatch}
+                </p>
               </div>
             </CardContent>
           </Card>

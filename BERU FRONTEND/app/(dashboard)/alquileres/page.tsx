@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, FileText, Calendar, CheckCircle2 } from "lucide-react"
+import { Plus, Search, FileText, Calendar, CheckCircle2, FileType } from "lucide-react"
 import * as api from "@/lib/api"
 import { effectiveEstadoBodegaForUi } from "@/lib/rental-estado"
 
@@ -518,7 +518,9 @@ export default function AlquileresPage() {
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Dias</TableHead>
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Total</TableHead>
                   <TableHead className="text-xs font-medium uppercase text-muted-foreground">Estado</TableHead>
-                  <TableHead className="text-xs font-medium uppercase text-muted-foreground">Facturar</TableHead>
+                  <TableHead className="text-xs font-medium uppercase text-muted-foreground">
+                    Facturar / PDF
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -543,7 +545,7 @@ export default function AlquileresPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           size="sm"
                           variant={estadoAlquilerUi(alquiler) === "facturado" ? "outline" : "default"}
@@ -567,6 +569,22 @@ export default function AlquileresPage() {
                         >
                           {estadoAlquilerUi(alquiler) === "liquidacion-parcial" ? "Conteo detenido" : "Liquidacion parcial"}
                         </Button>
+                        {(estadoAlquilerUi(alquiler) === "facturado" ||
+                          estadoAlquilerUi(alquiler) === "liquidacion-parcial") && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="h-9 w-9 shrink-0 border-muted-foreground/30 text-muted-foreground hover:border-destructive/50 hover:bg-destructive/5 hover:text-destructive"
+                            title="Imprimir / descargar PDF de la remision (proximamente)"
+                            aria-label="PDF de la remision"
+                            onClick={() => {
+                              /* Conectar generacion de PDF aqui */
+                            }}
+                          >
+                            <FileType className="h-4 w-4" aria-hidden />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

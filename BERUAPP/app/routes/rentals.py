@@ -381,16 +381,28 @@ def return_rental(
         raise HTTPException(status_code=400, detail="El alquiler ya fue facturado")
 
     estado_inv = _norm_estado_inventario(equipment.estado)
-    if estado_inv not in ("prestamo", "mantenimiento"):
+    fecha_salida = getattr(rental, "fecha_salida_bodega", None)
+    salida_ok = bool(rental.salida_bodega_registrada) and fecha_salida is not None
+    liquidacion_parcial_pendiente = bool(rental.fecha_facturacion) and not rental.facturado
+
+    puede_entrada_bodega = estado_inv in ("prestamo", "mantenimiento") or (
+        liquidacion_parcial_pendiente and salida_ok
+    )
+    if not puede_entrada_bodega:
         raise HTTPException(
             status_code=400,
-            detail="Solo entrada a bodega con equipo despachado (en prestamo o mantenimiento)",
+            detail="Solo entrada a bodega con equipo despachado (en prestamo o mantenimiento), "
+            "o con liquidacion parcial registrada y salida de bodega previa.",
         )
 
     return_dt = datetime.combine(datetime.now().date(), time.min)
     rental.fecha_fin = return_dt
-    rental.dias = _compute_days(rental.fecha_inicio, return_dt)
-    rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
+    if liquidacion_parcial_pendiente:
+        # No recalcular cobro: se respeta el corte de la liquidacion parcial.
+        rental.fecha_facturacion = None
+    else:
+        rental.dias = _compute_days(rental.fecha_inicio, return_dt)
+        rental.total = Decimal(rental.tarifa_diaria) * Decimal(rental.dias)
     equipment.estado = "disponible"
 
     _append_history(
